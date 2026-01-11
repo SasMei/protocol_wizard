@@ -304,7 +304,7 @@ def _create_snmp_client(config: dict) -> SNMPClient:
         version=config.get("version", "2c"),
     )
     
-def _create_mqtt_client(config: dict): -> MQTTClient:
+def _create_mqtt_client(config: dict) -> MQTTClient:
     """Create MQTT client (no caching needed - manages its own connection)."""
     from .protocols.mqtt import MQTTClient, CONF_BROKER, CONF_USERNAME, CONF_PASSWORD, DEFAULT_PORT
     
