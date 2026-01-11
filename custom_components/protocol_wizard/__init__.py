@@ -4,6 +4,9 @@
 """The Protocol Wizard integration."""
 import shutil
 import logging
+import json
+import os
+
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -12,9 +15,11 @@ from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient, Async
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service import SupportsResponse
 from datetime import timedelta
+# Import protocol registry and plugins
+from .protocols import ProtocolRegistry
+from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
-import json
-import os
+from .protocols.mqtt import MQTTClient
 
 from .const import (
     CONF_BAUDRATE,
@@ -47,9 +52,6 @@ from .const import (
     CONF_REGISTERS,
 )
 
-# Import protocol registry and plugins
-from .protocols import ProtocolRegistry
-from .protocols.modbus import ModbusClient
 
 _LOGGER = logging.getLogger(__name__)
 
