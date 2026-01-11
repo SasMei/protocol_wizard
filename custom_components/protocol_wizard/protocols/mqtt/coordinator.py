@@ -144,7 +144,52 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         except Exception as err:
             _LOGGER.warning("Failed to decode value: %s", err)
             return str(raw_value)
-
+            
+    def _encode_value(self, raw_value: Any, entity_config: dict) -> Any:
+        """
+        Encode value for writing to MQTT (used by base class for entity writes).
+        
+        Args:
+            raw_value: The value to encode (from entity state)
+            entity_config: Entity configuration with data_type, etc.
+        
+        Returns:
+            Encoded value ready for MQTT publish
+        """
+        data_type = entity_config.get("data_type", "string")
+        
+        try:
+            if data_type == "json":
+                # If it's already a dict/list, convert to JSON string
+                if isinstance(raw_value, (dict, list)):
+                    return json.dumps(raw_value)
+                # If it's a string, try to parse it as JSON to validate
+                if isinstance(raw_value, str):
+                    try:
+                        parsed = json.loads(raw_value)
+                        return json.dumps(parsed)
+                    except json.JSONDecodeError:
+                        return raw_value
+                return str(raw_value)
+            
+            elif data_type == "integer":
+                return int(float(raw_value))
+            
+            elif data_type == "float":
+                return float(raw_value)
+            
+            elif data_type == "boolean":
+                if isinstance(raw_value, str):
+                    return raw_value.lower() in ("true", "1", "on", "yes")
+                return bool(raw_value)
+            
+            else:  # string (default)
+                return str(raw_value)
+                
+        except (ValueError, TypeError) as err:
+            _LOGGER.warning("Failed to encode value %s as %s: %s", raw_value, data_type, err)
+            return str(raw_value)
+            
     def _convert_to_type(self, value: Any, data_type: str) -> Any:
         """Convert value to specified data type."""
         try:
