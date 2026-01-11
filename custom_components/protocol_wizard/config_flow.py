@@ -11,7 +11,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient, AsyncModbusUdpClient
-from .protocols.mqtt import CONF_BROKER, CONF_PORT, DEFAULT_PORT, CONF_USERNAME, CONF_PASSWORD
+from .protocols.mqtt import CONF_BROKER, DEFAULT_PORT, CONF_USERNAME, CONF_PASSWORD
 from .const import (
     CONNECTION_TYPE_SERIAL,
     CONNECTION_TYPE_IP,
