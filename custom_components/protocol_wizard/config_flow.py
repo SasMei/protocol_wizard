@@ -11,7 +11,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient, AsyncModbusUdpClient
-
+from .protocols.mqtt import CONF_BROKER, CONF_PORT, DEFAULT_PORT, CONF_USERNAME, CONF_PASSWORD
 from .const import (
     CONNECTION_TYPE_SERIAL,
     CONNECTION_TYPE_IP,
@@ -39,6 +39,7 @@ from .const import (
     DOMAIN,
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
+    CONF_PROTOCOL_MQTT
     CONF_PROTOCOL,
     CONF_IP,
     CONF_TEMPLATE,
@@ -77,7 +78,8 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_modbus_common()
             elif self._protocol == CONF_PROTOCOL_SNMP:
                 return await self.async_step_snmp_common()
-        
+            elif self._protocol == CONF_PROTOCOL_MQTT:
+                return await self.async_step_mqtt_common()       
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
@@ -86,7 +88,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         options=[
                             selector.SelectOptionDict(
                                 value=proto,
-                                label=proto.upper() if proto == CONF_PROTOCOL_SNMP else proto.title()
+                                label=proto.upper() if proto in (CONF_PROTOCOL_SNMP, CONF_PROTOCOL_MQTT) else proto.title()
                             )
                             for proto in sorted(available_protocols)
                         ],
@@ -518,3 +520,116 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise ConnectionError("Failed to connect to SNMP device")
         finally:
             await client.disconnect()
+
+    async def async_step_mqtt_common(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        """MQTT: Broker connection settings and test."""
+        errors = {}
+        
+        if user_input is not None:
+            try:
+                final_data = {
+                    CONF_PROTOCOL: CONF_PROTOCOL_MQTT,
+                    CONF_NAME: user_input[CONF_NAME],
+                    CONF_BROKER: user_input[CONF_BROKER],
+                    CONF_PORT: user_input.get(CONF_PORT, DEFAULT_PORT),
+                    CONF_USERNAME: user_input.get(CONF_USERNAME, ""),
+                    CONF_PASSWORD: user_input.get(CONF_PASSWORD, ""),
+                    CONF_UPDATE_INTERVAL: user_input.get(CONF_UPDATE_INTERVAL, 30),
+                }
+                
+                # Test MQTT connection
+                await self._async_test_mqtt_connection(final_data)
+                
+                # Handle template if selected
+                options = {}
+                use_template = user_input.get("use_template", False)
+                if use_template and user_input.get(CONF_TEMPLATE):
+                    options[CONF_TEMPLATE] = user_input[CONF_TEMPLATE]
+                
+                return self.async_create_entry(
+                    title=f"MQTT {final_data[CONF_BROKER]}",
+                    data=final_data,
+                    options=options,
+                )
+                
+            except Exception as err:
+                _LOGGER.exception("MQTT connection test failed: %s", err)
+                errors["base"] = "cannot_connect"
+        
+        # Get available templates
+        templates = self._get_available_templates()
+        template_options = [
+            selector.SelectOptionDict(value=t, label=t)
+            for t in templates
+        ]
+        
+        schema_dict = {
+            vol.Required(CONF_NAME, default="MQTT Device"): str,
+            vol.Required(CONF_BROKER): str,
+            vol.Optional(CONF_PORT, default=DEFAULT_PORT): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=65535)
+            ),
+            vol.Optional(CONF_USERNAME): str,
+            vol.Optional(CONF_PASSWORD): selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            ),
+            vol.Optional(CONF_UPDATE_INTERVAL, default=30): vol.All(
+                vol.Coerce(int), vol.Range(min=5, max=300)
+            ),
+        }
+        
+        # Add template selection if templates exist
+        if template_options:
+            schema_dict[vol.Optional("use_template", default=False)] = bool
+            schema_dict[vol.Optional(CONF_TEMPLATE)] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=template_options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+        
+        return self.async_show_form(
+            step_id="mqtt_common",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+            description_placeholders={
+                "broker_help": "Hostname or IP address of MQTT broker",
+                "port_help": "Default is 1883 (unencrypted) or 8883 (TLS)",
+            },
+        )
+        
+    async def _async_test_mqtt_connection(self, config: dict) -> None:
+        """Test MQTT broker connection."""
+        from .protocols.mqtt import MQTTClient
+        
+        client = None
+        try:
+            client = MQTTClient(
+                broker=config[CONF_BROKER],
+                port=config[CONF_PORT],
+                username=config.get(CONF_USERNAME) or None,
+                password=config.get(CONF_PASSWORD) or None,
+                timeout=10.0,
+            )
+            
+            connected = await client.connect()
+            
+            if not connected:
+                raise Exception("Could not connect to MQTT broker")
+            
+            _LOGGER.info("MQTT connection test successful to %s:%s", 
+                        config[CONF_BROKER], config[CONF_PORT])
+            
+        except Exception as err:
+            _LOGGER.error("MQTT connection test failed: %s", err)
+            raise Exception(
+                f"Cannot connect to MQTT broker at {config[CONF_BROKER]}:{config[CONF_PORT]}. "
+                "Check broker address, port, and credentials."
+            )
+        
+        finally:
+            if client:
+                try:
+                    await client.disconnect()
+                except Exception as err:
+                    _LOGGER.debug("Error disconnecting MQTT client: %s", err)
