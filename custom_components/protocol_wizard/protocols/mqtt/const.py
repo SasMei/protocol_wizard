@@ -2,9 +2,7 @@
 """Constants for MQTT protocol."""
 
 # Config keys
-CONF_ENTITIES = "entities"
 CONF_BROKER = "broker"
-CONF_PORT = "port"
 CONF_USERNAME = "username"
 CONF_PASSWORD = "password"
 CONF_CLIENT_ID = "client_id"
