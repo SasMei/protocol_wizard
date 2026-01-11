@@ -2,7 +2,7 @@
 """MQTT protocol implementation."""
 from .client import MQTTClient
 from .coordinator import MQTTCoordinator
-from ..const import CONF_ENTITIES, CONF_PORT
+from ...const import CONF_ENTITIES, CONF_PORT
 from .const import (
     CONF_BROKER,
     CONF_USERNAME,
