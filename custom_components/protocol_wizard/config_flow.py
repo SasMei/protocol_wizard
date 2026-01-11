@@ -214,7 +214,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if template_name:
                     self._selected_template = template_name
                     # Auto-fill test parameters from template
-                    addr, size = self._load_template_params(template_name)
+                    addr, size = await self._load_template_params(template_name)
                     self._data[CONF_FIRST_REG] = addr
                     self._data[CONF_FIRST_REG_SIZE] = size
             
@@ -224,7 +224,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_modbus_ip()
         
         # Get available templates
-        templates = self._get_available_templates()
+        templates = await self._get_available_templates()
         template_options = [
             selector.SelectOptionDict(value=t, label=t)
             for t in templates
@@ -517,7 +517,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
         
         # Get available templates
-        templates = self._get_available_templates()
+        templates = await self._get_available_templates()
         template_options = [
             selector.SelectOptionDict(value=t, label=t)
             for t in templates
@@ -614,7 +614,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
         
         # Get available templates
-        templates = self._get_available_templates()
+        templates = await self._get_available_templates()
         template_options = [
             selector.SelectOptionDict(value=t, label=t)
             for t in templates
