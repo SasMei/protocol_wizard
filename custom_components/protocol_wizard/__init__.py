@@ -555,7 +555,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         if not success:
             raise HomeAssistantError(f"Failed to write to OID {oid}")
 
-        async def handle_read_mqtt(call: ServiceCall):
+    async def handle_read_mqtt(call: ServiceCall):
         """MQTT read service."""
         coordinator = _get_coordinator(call)
         
