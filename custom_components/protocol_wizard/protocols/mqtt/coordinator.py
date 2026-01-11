@@ -14,7 +14,8 @@ from homeassistant.config_entries import ConfigEntry
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import MQTTClient
-from .const import CONF_ENTITIES, topic_key
+from ..const import CONF_ENTITIES
+from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
 
