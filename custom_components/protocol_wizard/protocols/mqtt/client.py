@@ -95,7 +95,10 @@ class MQTTClient(BaseProtocolClient):
         """Establish connection to MQTT broker."""
         try:
             if self._client is None:
-                self._client = mqtt_client.Client(self._client_id)
+                self._client = mqtt_client.Client(
+                    client_id=self._client_id,
+                    callback_api_version=mqtt_client.CallbackAPIVersion.VERSION1
+                )
                 
                 if self.username and self.password:
                     self._client.username_pw_set(self.username, self.password)
