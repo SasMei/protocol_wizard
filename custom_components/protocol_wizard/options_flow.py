@@ -233,7 +233,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         if user_input:
             filename = user_input["template"]
             # Protocol-specific template directory
-            protocol_subdir = "modbus" if self.protocol == CONF_PROTOCOL_MODBUS else "snmp"
+            protocol_subdir = self.protocol # works but needs to be more elaborate like in config_flow
             template_dir = self.hass.config.path(
                 "custom_components", DOMAIN, "templates", protocol_subdir
             )
@@ -266,7 +266,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 )
 
         # List templates from protocol-specific folder
-        protocol_subdir = "modbus" if self.protocol == CONF_PROTOCOL_MODBUS else "snmp"
+        protocol_subdir = self.protocol # needs to be more elaborate like in config flow
         template_dir = self.hass.config.path(
             "custom_components", DOMAIN, "templates", protocol_subdir
         )
@@ -313,7 +313,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"name": "required"},
                 )
     
-            protocol_subdir = "modbus" if self.protocol == CONF_PROTOCOL_MODBUS else "snmp"
+            protocol_subdir = self.protocol # is for now true
             template_dir = self.hass.config.path(
                 "custom_components", DOMAIN, "templates", protocol_subdir
             )
