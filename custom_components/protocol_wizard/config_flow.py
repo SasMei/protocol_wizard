@@ -108,7 +108,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         protocol_to_subdir = {
             CONF_PROTOCOL_MODBUS: "modbus",
             CONF_PROTOCOL_SNMP: "snmp",
-            CONF_PROTOCOL_MQTT "mqtt",
+            CONF_PROTOCOL_MQTT: "mqtt",
             # Add future protocols here, e.g.:
             # "bacnet": "bacnet",
         }
@@ -152,10 +152,17 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         protocol_to_subdir = {
             CONF_PROTOCOL_MODBUS: "modbus",
             CONF_PROTOCOL_SNMP: "snmp",
-            CONF_PROTOCOL_MQTT "mqtt",
+            CONF_PROTOCOL_MQTT: "mqtt",
             # Add future protocols here, e.g.:
             # "bacnet": "bacnet",
         }
+        # Get subdir or fallback to empty
+        protocol_subdir = protocol_to_subdir.get(self._protocol, "")
+    
+        if not protocol_subdir:
+            _LOGGER.warning("No template subdir defined for protocol: %s", self._protocol)
+            return []
+            
         path = self.hass.config.path(
             "custom_components", DOMAIN, "templates", protocol_subdir, f"{template_name}.json"
         )
