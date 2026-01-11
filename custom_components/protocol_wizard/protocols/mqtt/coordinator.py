@@ -14,13 +14,13 @@ from homeassistant.config_entries import ConfigEntry
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import MQTTClient
-from ..const import CONF_ENTITIES
+from ..const import CONF_ENTITIES,CONF_PROTOCOL_MQTT
 from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
 
 
-@ProtocolRegistry.register("mqtt")
+@ProtocolRegistry.register(CONF_PROTOCOL_MQTT )
 class MQTTCoordinator(BaseProtocolCoordinator):
     """MQTT protocol coordinator."""
 
@@ -39,7 +39,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             update_interval=update_interval,
             name="MQTT Monitor",
         )
-        self.protocol_name = "mqtt"
+        self.protocol_name = CONF_PROTOCOL_MQTT 
         self._lock = asyncio.Lock()
 
     async def _async_update_data(self) -> dict[str, Any]:
