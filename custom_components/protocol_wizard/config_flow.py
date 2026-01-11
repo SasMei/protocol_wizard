@@ -201,6 +201,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     
     async def async_step_modbus_common(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Modbus: Common settings with optional template selection."""
+        self._protocol = CONF_PROTOCOL_MODBUS
         errors = {}
         
         if user_input is not None:
@@ -483,6 +484,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     
     async def async_step_snmp_common(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """SNMP: Connection settings and test."""
+        self._protocol = CONF_PROTOCOL_SNMP
         errors = {}
         
         if user_input is not None:
@@ -580,6 +582,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_mqtt_common(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """MQTT: Broker connection settings and test."""
+        self._protocol = CONF_PROTOCOL_MQTT
         errors = {}
         
         if user_input is not None:
