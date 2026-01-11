@@ -6,7 +6,7 @@ import asyncio
 import logging
 import json
 from typing import Any
-from collections import defaultdict
+# from collections import defaultdict
 
 import paho.mqtt.client as mqtt_client
 
