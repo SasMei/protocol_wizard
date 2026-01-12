@@ -140,7 +140,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
-            client = _create_mqtt_client(config)
+            client = _create_mqtt_client(config, hass)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
@@ -304,11 +304,12 @@ def _create_snmp_client(config: dict) -> SNMPClient:
         version=config.get("version", "2c"),
     )
     
-def _create_mqtt_client(config: dict) -> MQTTClient:
+def _create_mqtt_client(config: dict, hass: HomeAssistant) -> MQTTClient:
     """Create MQTT client (no caching needed - manages its own connection)."""
     from .protocols.mqtt import MQTTClient, CONF_BROKER, CONF_USERNAME, CONF_PASSWORD, DEFAULT_PORT
     
     return MQTTClient(
+        hass=hass,
         broker=config[CONF_BROKER],
         port=config.get(CONF_PORT, DEFAULT_PORT),
         username=config.get(CONF_USERNAME) or None,
