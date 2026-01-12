@@ -1,0 +1,26 @@
+[
+  {
+    "name": "BrokerLoad",
+    "address": "$SYS/broker/load/#",
+    "data_type": "string",
+    "rw": "read",
+    "scale": 1.0,
+    "offset": 0.0
+  },
+  {
+    "name": "BrokerVersion",
+    "address": "$SYS/broker/version",
+    "data_type": "string",
+    "rw": "read",
+    "scale": 1.0,
+    "offset": 0.0
+  },
+  {
+    "name": "BrokerClients",
+    "address": "$SYS/broker/clients/#",
+    "data_type": "string",
+    "rw": "read",
+    "scale": 1.0,
+    "offset": 0.0
+  }
+]
