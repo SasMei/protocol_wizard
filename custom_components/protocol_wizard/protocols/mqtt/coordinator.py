@@ -287,9 +287,10 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         """
         Read a single MQTT topic (for services/card).
         ✅ Uses client.read() which handles cache + subscribe automatically.
+        ✅ Supports wildcards - returns formatted dict of topics
         
         Args:
-            address: MQTT topic
+            address: MQTT topic (can include wildcards: + or #)
             entity_config: Entity configuration
             wait_time: How long to wait for message
         """
@@ -307,6 +308,22 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                 _LOGGER.warning("[MQTT] No message received on %s", address)
                 return None
             
+            # Check if wildcard response (dict of topics)
+            if isinstance(payload, dict) and ('+' in address or '#' in address):
+                # Format as readable string for display
+                lines = []
+                for topic, value in sorted(payload.items()):
+                    # Truncate long values
+                    value_str = str(value)
+                    if len(value_str) > 100:
+                        value_str = value_str[:97] + "..."
+                    lines.append(f"{topic} = {value_str}")
+                
+                result = "\n".join(lines)
+                _LOGGER.info("[MQTT] Wildcard %s matched %d topics", address, len(payload))
+                return result
+            
+            # Single topic - decode normally
             return self._decode_value(payload, entity_config)
             
         except Exception as err:
