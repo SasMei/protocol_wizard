@@ -18,9 +18,7 @@ from ...const import CONF_ENTITIES, CONF_PROTOCOL_MQTT
 from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
-# Reduce noise from HA
-# Setting parent logger to CRITICAL to catch all sub-loggers
-logging.getLogger("homeassistant.helpers.update_coordinator").setLevel(logging.CRITICAL)
+
 
 @ProtocolRegistry.register(CONF_PROTOCOL_MQTT)
 class MQTTCoordinator(BaseProtocolCoordinator):
@@ -48,7 +46,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         """
         Fetch latest data from configured MQTT entities.
         
-        Event-Driven: Just reads from cache, no waiting!
+        ✅ Event-Driven: Just reads from cache, no waiting!
         Messages arrive continuously in background via _on_message callback.
         """
         if not await self._async_connect():
@@ -280,45 +278,40 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                 return None  # Return None for numeric entities
             return value  # Return original for non-numeric
 
-    async def async_read_entity(self, address: str, entity_config: dict, **kwargs) -> Any:
-        """Read a single MQTT topic (handles both cached and one-off reads)."""
+    async def async_read_entity(
+        self,
+        address: str,
+        entity_config: dict,
+        **kwargs,
+    ) -> Any:
+        """
+        Read a single MQTT topic (for services/card).
+        ✅ Uses client.read() which handles cache + subscribe automatically.
+        
+        Args:
+            address: MQTT topic
+            entity_config: Entity configuration
+            wait_time: How long to wait for message
+        """
         if not await self._async_connect():
             return None
-    
-        wait_time = kwargs.get("wait_time", 5.0)
         
-        # 1. Check if we already have it in cache
-        payload = self.client.get_cached_message(address)
-        if payload is not None:
-            return self._decode_value(payload, entity_config)
-    
-        # 2. If not in cache, we need to listen for it specifically
-        _LOGGER.debug("[MQTT] Topic %s not in cache, performing one-off listen", address)
-        
-        # This 'future' will be resolved when the message arrives
-        loop = asyncio.get_running_loop()
-        future = loop.create_future()
-    
-        def single_msg_callback(topic, payload, qos, retain):
-            if topic == address and not future.done():
-                future.set_result(payload)
-    
-        # Subscribe temporarily
-        await self.client.subscribe(address, single_msg_callback)
-    
         try:
-            # Wait for the message to arrive
-            raw_payload = await asyncio.wait_for(future, timeout=wait_time)
-            return self._decode_value(raw_payload, entity_config)
-        except asyncio.TimeoutError:
-            _LOGGER.warning("[MQTT] Timeout waiting for message on %s", address)
+            wait_time = kwargs.get("wait_time", 5.0)
+            _LOGGER.debug("[MQTT] Reading topic %s (wait_time=%.1f)", address, wait_time)
+            
+            # ✅ Client handles everything: cache lookup, subscribe, wait
+            payload = await self.client.read(address, wait_time=wait_time)
+            
+            if payload is None:
+                _LOGGER.warning("[MQTT] No message received on %s", address)
+                return None
+            
+            return self._decode_value(payload, entity_config)
+            
+        except Exception as err:
+            _LOGGER.error("Failed to read MQTT topic %s: %s", address, err)
             return None
-        finally:
-            # Important: Unsubscribe if this isn't a persistent entity topic
-            # to avoid memory leaks and unnecessary traffic
-            is_persistent = any(e["address"] == address for e in self.my_config_entry.options.get(CONF_ENTITIES, []))
-            if not is_persistent:
-                await self.client.unsubscribe(address)
 
     async def async_write_entity(
         self,
