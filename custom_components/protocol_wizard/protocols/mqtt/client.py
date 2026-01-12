@@ -33,6 +33,7 @@ class MQTTClient(BaseProtocolClient):
         self.username = username
         self.password = password
         self.timeout = timeout
+        self.hass = hass
 
         self._client: mqtt_client.Client | None = None
         self._connected = False
