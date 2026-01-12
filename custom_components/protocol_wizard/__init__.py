@@ -211,7 +211,7 @@ async def _load_template_into_options(
    
     try:
         
-        template_data = await load_template(hass, protocol, template_id)
+        template_data = await load_template(hass, protocol, template_name)
         
         if not template_data:
             _LOGGER.warning("Template %s is empty", template_name)
@@ -227,10 +227,6 @@ async def _load_template_into_options(
         hass.config_entries.async_update_entry(entry, options=new_options)
         _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
-    except FileNotFoundError:
-        _LOGGER.error("Template file not found: %s", template_path)
-    except json.JSONDecodeError as err:
-        _LOGGER.error("Failed to parse template %s: %s", template_name, err)
     except Exception as err:
         _LOGGER.error("Failed to load template %s: %s", template_name, err)
 
