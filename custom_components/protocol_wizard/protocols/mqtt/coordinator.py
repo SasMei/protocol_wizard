@@ -19,6 +19,10 @@ from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
 
+# Reduce noise from pymodbus
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 @ProtocolRegistry.register(CONF_PROTOCOL_MQTT )
 class MQTTCoordinator(BaseProtocolCoordinator):
