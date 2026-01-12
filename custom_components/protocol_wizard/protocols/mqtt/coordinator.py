@@ -79,12 +79,19 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                     new_data[key] = None
                     continue
                 
-                # Decode the value
-                decoded = self._decode_value(payload, entity)
-                new_data[key] = decoded
-                
-                # Store raw for debugging
-                new_data[f"{key}_raw"] = payload
+                # Check if this is a wildcard entity (dict response)
+                if isinstance(payload, dict):
+                    # Wildcard entity - store count as state, full data as attribute
+                    new_data[key] = len(payload)  # State = count of topics
+                    new_data[f"{key}_topics"] = list(payload.keys())  # Attribute = topic list
+                    new_data[f"{key}_raw"] = payload  # Attribute = full data
+                    _LOGGER.debug("Wildcard entity %s has %d topics", key, len(payload))
+                else:
+                    # Single topic - decode normally
+                    decoded = self._decode_value(payload, entity)
+                    new_data[key] = decoded
+                    # Store raw for debugging
+                    new_data[f"{key}_raw"] = payload
                 
             except Exception as err:
                 _LOGGER.warning(
