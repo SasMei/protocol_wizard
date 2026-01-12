@@ -1,13 +1,5 @@
 [
   {
-    "name": "Device State",
-    "address": "zigbee2mqtt/device/state",
-    "data_type": "string",
-    "rw": "read",
-    "qos": 0,
-    "retain": false
-  },
-  {
     "name": "Temperature",
     "address": "zigbee2mqtt/device/temperature",
     "data_type": "float",
@@ -30,17 +22,5 @@
     "device_class": "humidity",
     "state_class": "measurement",
     "unit": "%"
-  },
-  {
-    "name": "Power Control",
-    "address": "zigbee2mqtt/device/set/state",
-    "data_type": "string",
-    "rw": "write",
-    "qos": 1,
-    "retain": true,
-    "options": {
-      "OFF": "OFF",
-      "ON": "ON"
-    }
   }
 ]
