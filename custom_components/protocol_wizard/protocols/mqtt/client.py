@@ -204,41 +204,68 @@ class MQTTClient(BaseProtocolClient):
     def get_cached_message(self, topic: str) -> Any | None:
         """
         Get cached message for topic (instant!).
+        Supports wildcards: + (single level) and # (multi-level)
         
         Args:
-            topic: MQTT topic
+            topic: MQTT topic (can include wildcards)
             
         Returns:
             Cached payload or None if no message received yet
+            If wildcard used, returns dict of {topic: payload}
         """
-        cached = self._message_cache.get(topic)
-        if cached:
-            return cached["payload"]
-        return None
+        # Check if topic contains wildcards
+        if '+' in topic or '#' in topic:
+            import re
+            # Convert MQTT wildcard pattern to regex
+            pattern = topic.replace('+', '[^/]+').replace('#', '.*')
+            pattern = f"^{pattern}$"
+            regex = re.compile(pattern)
+            
+            # Find all matching topics
+            matches = {}
+            for cached_topic, cached_data in self._message_cache.items():
+                if regex.match(cached_topic):
+                    matches[cached_topic] = cached_data["payload"]
+            
+            return matches if matches else None
+        else:
+            # Exact topic match
+            cached = self._message_cache.get(topic)
+            if cached:
+                return cached["payload"]
+            return None
 
     async def read(self, address: str, **kwargs) -> Any | None:
         """
         Read from MQTT topic (for card/services).
         For one-time reads, subscribe temporarily and wait for message.
+        Supports wildcards: + (single level) and # (multi-level)
         
         Args:
-            address: MQTT topic
+            address: MQTT topic (can include wildcards)
             wait_time: How long to wait for message
             
         Returns:
-            Payload or None
+            Payload, dict of {topic: payload} for wildcards, or None
         """
         topic = address
         wait_time = kwargs.get("wait_time", 5.0)
+        is_wildcard = '+' in topic or '#' in topic
         
         # Check if already cached (from persistent subscription)
         cached = self.get_cached_message(topic)
         if cached is not None:
-            _LOGGER.debug("Returning cached value for %s", topic)
+            if is_wildcard:
+                _LOGGER.debug("Returning %d cached topics matching %s", len(cached), topic)
+            else:
+                _LOGGER.debug("Returning cached value for %s", topic)
             return cached
         
         # Not cached - subscribe and wait for message
-        _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
+        if is_wildcard:
+            _LOGGER.debug("Subscribing to wildcard %s and waiting %.1fs", topic, wait_time)
+        else:
+            _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
         
         # Subscribe (will start caching messages)
         success = await self.subscribe_persistent(topic)
@@ -246,27 +273,37 @@ class MQTTClient(BaseProtocolClient):
             _LOGGER.error("Failed to subscribe to %s", topic)
             return None
         
-        # IMPORTANT: Give broker time to send retained message!
+        # IMPORTANT: Give broker time to send retained messages!
         # Retained messages arrive quickly, but not instantly
         await asyncio.sleep(0.5)  # 500ms should be plenty
         
-        # Check cache immediately after subscribe (retained message should be here)
+        # Check cache immediately after subscribe (retained messages should be here)
         cached = self.get_cached_message(topic)
         if cached is not None:
-            _LOGGER.info("Got retained message for %s immediately after subscribe", topic)
+            if is_wildcard:
+                _LOGGER.info("Got %d retained topics matching %s after subscribe", len(cached), topic)
+            else:
+                _LOGGER.info("Got retained message for %s immediately after subscribe", topic)
             return cached
         
         # No retained message - wait for live message
-        _LOGGER.debug("No retained message for %s, waiting for live message", topic)
+        if is_wildcard:
+            _LOGGER.debug("No retained messages for %s, waiting for live messages", topic)
+        else:
+            _LOGGER.debug("No retained message for %s, waiting for live message", topic)
+        
         deadline = asyncio.get_event_loop().time() + wait_time
         while asyncio.get_event_loop().time() < deadline:
             cached = self.get_cached_message(topic)
             if cached is not None:
-                _LOGGER.info("Got live message for %s", topic)
+                if is_wildcard:
+                    _LOGGER.info("Got %d live topics matching %s", len(cached), topic)
+                else:
+                    _LOGGER.info("Got live message for %s", topic)
                 return cached
             await asyncio.sleep(0.1)
         
-        _LOGGER.warning("No message received on %s after %.1fs", topic, wait_time)
+        _LOGGER.warning("No message received matching %s after %.1fs", topic, wait_time)
         return None
 
     async def write(self, address: str, value: Any, **kwargs) -> bool:
