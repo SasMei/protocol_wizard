@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 import json
-import os
 from datetime import timedelta
 import voluptuous as vol
 from .template_utils import ( 
@@ -14,6 +13,7 @@ from .template_utils import (
     get_available_templates, 
     get_template_dropdown_choices, 
     load_template,
+    delete_template,
 )
 from homeassistant import config_entries
 from homeassistant.helpers import selector
