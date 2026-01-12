@@ -330,7 +330,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             else:
                 # Convert to string
                 value = str(value)
-            _LOGGER.debug("[MQTT] About to write to %s with value %s (qos:%d,retrain:%d)", address, value,qos,retrain)
+            _LOGGER.debug("[MQTT] About to write to %s with value %s (qos:%d,retain:%d)", address, value,qos,retain)
             return await self.client.write(
                 address,
                 value,
