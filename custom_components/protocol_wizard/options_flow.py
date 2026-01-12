@@ -404,6 +404,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     def _get_schema_handler(self):
         if self.protocol == CONF_PROTOCOL_SNMP:
             return SNMPSchemaHandler()
+        elif self.protocol == CONF_PROTOCOL_MQTT:
+            return MQTTSchemaHandler()
         return ModbusSchemaHandler()
 
 
@@ -813,16 +815,17 @@ class MQTTSchemaHandler:
     
     def process_input(self, user_input, errors, existing=None):
         """Process and validate user input."""
-        processed = dict(user_input)
+        # Start with existing data (for edits) or empty dict
+        processed = dict(existing) if existing else {}
+        
+        # Update with new values
+        processed.update(user_input)
         
         # Validate topic format
         topic = processed.get("address", "")
         if not topic:
             errors["address"] = "Topic cannot be empty"
             return None
-        
-        # MQTT topics can't have wildcards in entity config (only for subscribe)
-        # But we'll allow them for flexibility
         
         # Validate QoS
         try:
@@ -835,16 +838,21 @@ class MQTTSchemaHandler:
             errors["qos"] = "Invalid QoS value"
             return None
         
+        # Ensure boolean retain
+        processed["retain"] = bool(processed.get("retain", False))
+        
         # Parse options JSON if provided
-        opts_str = processed.get("options", "").strip()
-        if opts_str:
+        opts_str = processed.get("options", "")
+        if isinstance(opts_str, str) and opts_str.strip():
             try:
-                import json
                 opts = json.loads(opts_str)
                 processed["options"] = opts
             except json.JSONDecodeError:
                 errors["options"] = "Invalid JSON format"
                 return None
+        elif isinstance(opts_str, dict):
+            # Already a dict (from template)
+            processed["options"] = opts_str
         else:
             processed.pop("options", None)
         
@@ -852,6 +860,22 @@ class MQTTSchemaHandler:
         for field in ["format", "device_class", "state_class", "entity_category", "icon", "unit"]:
             if not processed.get(field):
                 processed.pop(field, None)
+        
+        # ADD REQUIRED DEFAULTS
+        processed.setdefault("data_type", "string")
+        processed.setdefault("rw", "read")
+        processed.setdefault("qos", 0)
+        processed.setdefault("retain", False)
+        processed.setdefault("scale", 1.0)
+        processed.setdefault("offset", 0.0)
+        
+        # Ensure numeric types
+        try:
+            processed["scale"] = float(processed.get("scale", 1.0))
+            processed["offset"] = float(processed.get("offset", 0.0))
+        except (ValueError, TypeError):
+            errors["scale"] = "Invalid number"
+            return None
         
         return processed
     
