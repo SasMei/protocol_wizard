@@ -43,9 +43,6 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         )
         self.protocol_name = CONF_PROTOCOL_MQTT
         self._lock = asyncio.Lock()
-        entities = config_entry.options.get(CONF_ENTITIES, [])
-        if entities:
-            hass.async_create_task(self._ensure_subscriptions(entities))
 
     async def _async_update_data(self) -> dict[str, Any]:
         """
