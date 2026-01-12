@@ -9,7 +9,12 @@ import json
 import os
 from datetime import timedelta
 import voluptuous as vol
-
+from .template_utils import ( 
+    save_template, 
+    get_available_templates, 
+    get_template_dropdown_choices, 
+    load_template,
+)
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
@@ -75,6 +80,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             "add_entity": "Add entity",
             "load_template": "Load template",
             "export_template": "Export template",
+            "delete_template": "Delete user template",
         }
         if self._entities:
             menu_options["list_entities"] = f"Entities ({len(self._entities)})"
@@ -227,77 +233,81 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     # ------------------------------------------------------------------
     # TEMPLATE
     # ------------------------------------------------------------------
-
-    async def async_step_load_template(self, user_input=None):
-        """Load a device template — protocol-specific folder."""
+    async def async_step_delete_template(self, user_input=None):
+        """Delete a user template."""
         if user_input:
-            filename = user_input["template"]
-            # Protocol-specific template directory
-            protocol_subdir = self.protocol # works but needs to be more elaborate like in config_flow
-            template_dir = self.hass.config.path(
-                "custom_components", DOMAIN, "templates", protocol_subdir
+            template_id = user_input["template"]
+            
+            success, message = await delete_template(
+                self.hass,
+                self.protocol,
+                template_id
             )
-            path = os.path.join(template_dir, f"{filename}.json")
-
-            try:
-                data = await self.hass.async_add_executor_job(self._load_template, path)
-                added = self.schema_handler.merge_template(self._entities, data)
-                if not added:
-                    return self.async_show_form(
-                        step_id="load_template",
-                        data_schema=self._get_template_schema(),
-                        errors={"base": "template_empty_or_duplicate"},
-                    )
-                self._save_entities()
-                return await self.async_step_init()
-            except FileNotFoundError:
-                _LOGGER.error("Template file not found: %s", path)
+            
+            if not success:
+                return self.async_show_form(
+                    step_id="delete_template",
+                    data_schema=self._get_delete_template_schema(),
+                    errors={"base": "delete_failed"},
+                    description_placeholders={"error": message}
+                )
+            
+            return self.async_abort(reason="template_deleted")
+        
+        # Get only user templates
+        all_templates = await get_available_templates(self.hass, self.protocol)
+        user_templates = {
+            tid: info for tid, info in all_templates.items()
+            if tid.startswith("user:")
+        }
+        dropdown_choices = get_template_dropdown_choices(user_templates)
+        
+        if not dropdown_choices:
+            return self.async_abort(reason="no_user_templates")
+        
+        return self.async_show_form(
+            step_id="delete_template",
+            data_schema=vol.Schema({
+                vol.Required("template"): vol.In(dropdown_choices)
+            })
+        )
+    async def async_step_load_template(self, user_input=None):
+        """Load a device template."""
+        if user_input:
+            template_id = user_input["template"]
+            
+            entities = await load_template(self.hass, self.protocol, template_id)
+            
+            if not entities:
                 return self.async_show_form(
                     step_id="load_template",
                     data_schema=self._get_template_schema(),
                     errors={"base": "template_not_found"},
                 )
-            except Exception as err:
-                _LOGGER.error("Template load failed: %s", err)
+            
+            added = self.schema_handler.merge_template(self._entities, entities)
+            
+            if added == 0:
                 return self.async_show_form(
                     step_id="load_template",
                     data_schema=self._get_template_schema(),
-                    errors={"base": "load_failed"},
+                    errors={"base": "template_empty_or_duplicate"},
                 )
-
-        # List templates from protocol-specific folder
-        protocol_subdir = self.protocol # needs to be more elaborate like in config flow
-        template_dir = self.hass.config.path(
-            "custom_components", DOMAIN, "templates", protocol_subdir
-        )
-
-        try:
-            files = await self.hass.async_add_executor_job(
-                lambda: [
-                    f[:-5]  # strip .json
-                    for f in os.listdir(template_dir)
-                    if f.endswith(".json")
-                ] if os.path.exists(template_dir) else []
-            )
-            templates = sorted(files)
-        except Exception as err:
-            _LOGGER.debug("Failed to list templates in %s: %s", template_dir, err)
-            templates = []
-
-        if not templates:
+            
+            return await self.async_step_manage_entities()
+        
+        # Get templates for dropdown
+        templates = await get_available_templates(self.hass, self.protocol)
+        dropdown_choices = get_template_dropdown_choices(templates)
+        
+        if not dropdown_choices:
             return self.async_abort(reason="no_templates")
-
+        
         return self.async_show_form(
             step_id="load_template",
             data_schema=vol.Schema({
-                vol.Required("template"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[selector.SelectOptionDict(value=t, label=t) for t in templates],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                )
-            }),
-            description_placeholders={"templates": ", ".join(templates)},
+                vol.Required("template"): vol.In(dropdown_choices)
+            })
         )
     # ------------------------------------------------------------------
     # Export template
@@ -305,41 +315,56 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     async def async_step_export_template(self, user_input=None):
         if user_input:
             name = user_input["name"].strip()
-    
+            to_user_dir = user_input.get("save_to_user_dir", True)  # New option!
+            
             if not name:
                 return self.async_show_form(
                     step_id="export_template",
                     data_schema=self._export_schema(),
                     errors={"name": "required"},
                 )
-    
-            protocol_subdir = self.protocol # is for now true
-            template_dir = self.hass.config.path(
-                "custom_components", DOMAIN, "templates", protocol_subdir
+            
+            # Optional: Get device metadata for richer templates
+            metadata = {
+                "name": name,
+                "description": f"Exported from {self.config_entry.title}",
+                "protocol": self.protocol,
+            }
+            
+            success, message = await save_template(
+                self.hass,
+                self.protocol,
+                name,
+                self._entities,
+                metadata=metadata,
+                to_user_dir=to_user_dir
             )
-    
-            os.makedirs(template_dir, exist_ok=True)
-    
-            path = os.path.join(template_dir, f"{name}.json")
-    
-            try:
-                await self.hass.async_add_executor_job(
-                    self._write_template, path, self._entities
-                )
-                return self.async_abort(reason="template_exported")
-    
-            except Exception as err:
-                _LOGGER.error("Template export failed: %s", err)
+            
+            if not success:
                 return self.async_show_form(
                     step_id="export_template",
                     data_schema=self._export_schema(),
                     errors={"base": "export_failed"},
+                    description_placeholders={"error": message}
                 )
-    
+            
+            return self.async_show_form(
+                step_id="export_template",
+                data_schema=self._export_schema(),
+                description_placeholders={"message": message}
+            )
+        
         return self.async_show_form(
             step_id="export_template",
-            data_schema=self._export_schema(),
+            data_schema=self._export_schema()
         )
+    
+    def _export_schema(self):
+        """Get export template schema."""
+        return vol.Schema({
+            vol.Required("name"): str,
+            vol.Optional("save_to_user_dir", default=True): bool,  # NEW!
+        })
     # ------------------------------------------------------------------
     # INTERNAL
     # ------------------------------------------------------------------
