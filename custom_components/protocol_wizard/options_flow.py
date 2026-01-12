@@ -593,13 +593,23 @@ class ModbusSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
 
     def merge_template(self, entities, template):
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added
 
 
@@ -724,13 +734,23 @@ class SNMPSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
 
     def merge_template(self, entities, template):
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added
 
 class MQTTSchemaHandler:
@@ -868,12 +888,21 @@ class MQTTSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
     
     def merge_template(self, entities, template):
-        """Merge template entities into existing list."""
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added
