@@ -11,7 +11,7 @@ See [DOCUMENTATION](https://github.com/partach/protocol_wizard/wiki) for details
 
 **Configure and control devices entirely from the UI — no YAML, no restarts!**<br>
 
-Protocol Wizard lets you discover, test, and integrate devices (Modbus, SNMP) directly in Home Assistant — all through a simple, powerful interface.<br>
+Protocol Wizard lets you discover, test, and integrate devices (Modbus, SNMP, MQTT) directly in Home Assistant — all through a simple, powerful interface.<br>
 All run-time!
 
 <p align="center">
@@ -25,9 +25,9 @@ All run-time!
 
 - **Zero YAML configuration** — everything done via the Home Assistant UI
 - Device templates support! Just present your device as a json template! (see below)
-- Full support for **serial (RS485/USB)** and **IP-based (TCP & UDP)**
+- Full support for Modbus **serial (RS485/USB)** and **IP-based (TCP & UDP)**
 - **Runtime entity management** — add, edit, or remove sensors without restarting HA
-- Dedicated **Lovelace cards** for live reading/writing any register/OID/etc. (perfect for testing and debugging)
+- Dedicated **Lovelace cards** for live reading/writing any register/ OID / Topic /etc. (perfect for testing and debugging)
 - Create only the entities you need — keep your setup clean and efficient
 - Modbus: **Multiple slaves** supported (up to 255 per bus/network) with individual slave IDs
 - Modbus: **Multiple masters** possible (HA as master; coexists with other masters if no conflicts)
@@ -217,9 +217,7 @@ When adding or editing a register, the following fields are available:
 - **Full control** — bit-level access, custom scaling, endianness, raw mode
 
 ## Roadmap & Planned Features
-- More **Templates for common devices**: Pre-load register sets for popular boards like WaveShare RS485 series (save typing, reduce errors)
-- **Enhanced card display**: Support also SNMP, for Modbus enhancements, other protocols
-- **Diagnostic export**: One-click YAML/JSON report of all registers and values for troubleshooting
+- More **Templates for common devices**: More templates pre-loaded with the integration
 
 ## Support & Feedback
 
