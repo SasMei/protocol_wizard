@@ -216,9 +216,15 @@ class MQTTClient(BaseProtocolClient):
         # Check if topic contains wildcards
         if '+' in topic or '#' in topic:
             import re
-            # Convert MQTT wildcard pattern to regex
-            pattern = topic.replace('+', '[^/]+').replace('#', '.*')
+            # First, escape all regex special characters EXCEPT + and #
+            # Then convert MQTT wildcards to regex patterns
+            pattern = re.escape(topic)  # Escape everything first
+            pattern = pattern.replace(r'\+', '[^/]+')  # + = single level (no slashes)
+            pattern = pattern.replace(r'\#', '.*')     # # = multi-level (anything)
             pattern = f"^{pattern}$"
+            
+            _LOGGER.debug("Wildcard pattern: %s → regex: %s", topic, pattern)
+            
             regex = re.compile(pattern)
             
             # Find all matching topics
@@ -227,6 +233,7 @@ class MQTTClient(BaseProtocolClient):
                 if regex.match(cached_topic):
                     matches[cached_topic] = cached_data["payload"]
             
+            _LOGGER.debug("Wildcard %s matched %d topics", topic, len(matches))
             return matches if matches else None
         else:
             # Exact topic match
@@ -274,8 +281,35 @@ class MQTTClient(BaseProtocolClient):
             return None
         
         # IMPORTANT: Give broker time to send retained messages!
-        # Retained messages arrive quickly, but not instantly
-        await asyncio.sleep(0.5)  # 500ms should be plenty
+        # Wildcards may match MANY topics (e.g., $SYS/# = 100+ topics)
+        # so we need to wait longer for all retained messages to arrive
+        if is_wildcard:
+            # Poll cache while waiting - messages arrive over ~1-2 seconds
+            poll_deadline = asyncio.get_event_loop().time() + 2.0
+            last_count = 0
+            stable_checks = 0
+            
+            while asyncio.get_event_loop().time() < poll_deadline:
+                await asyncio.sleep(0.2)  # Check every 200ms
+                cached = self.get_cached_message(topic)
+                
+                if cached:
+                    current_count = len(cached)
+                    if current_count > last_count:
+                        # Still receiving messages
+                        _LOGGER.debug("Wildcard %s: %d topics received", topic, current_count)
+                        last_count = current_count
+                        stable_checks = 0
+                    else:
+                        # Count stable - might be done
+                        stable_checks += 1
+                        if stable_checks >= 3:  # Stable for 600ms
+                            _LOGGER.debug("Wildcard %s: stabilized at %d topics", topic, current_count)
+                            break
+            
+            _LOGGER.info("Wildcard %s: received %d total topics", topic, last_count)
+        else:
+            await asyncio.sleep(0.5)  # 500ms for single topics
         
         # Check cache immediately after subscribe (retained messages should be here)
         cached = self.get_cached_message(topic)
