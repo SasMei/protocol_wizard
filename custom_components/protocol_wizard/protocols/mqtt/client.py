@@ -226,9 +226,20 @@ class MQTTClient(BaseProtocolClient):
         try:
             def do_publish():
                 result = self._client.publish(topic, payload, qos=qos, retain=retain)
+                # For QoS > 0, wait for publish to complete (with timeout)
+                if qos > 0:
+                    result.wait_for_publish(timeout=5.0)
                 return result.rc == mqtt_client.MQTT_ERR_SUCCESS
             
-            success = await asyncio.get_event_loop().run_in_executor(None, do_publish)
+            # Run in executor with timeout wrapper
+            try:
+                success = await asyncio.wait_for(
+                    asyncio.get_event_loop().run_in_executor(None, do_publish),
+                    timeout=10.0  # 10 second timeout for publish
+                )
+            except asyncio.TimeoutError:
+                _LOGGER.error("MQTT publish timeout for topic %s", topic)
+                return False
             
             if success:
                 _LOGGER.debug("Published to %s: %s", topic, payload)
