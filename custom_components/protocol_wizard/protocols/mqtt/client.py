@@ -14,6 +14,10 @@ from ..base import BaseProtocolClient
 
 _LOGGER = logging.getLogger(__name__)
 
+# Reduce noise from pymodbus
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class MQTTClient(BaseProtocolClient):
     """MQTT client wrapper for Protocol Wizard."""
