@@ -20,6 +20,7 @@ class MQTTClient(BaseProtocolClient):
 
     def __init__(
         self,
+        hass,
         broker: str,
         port: int = 1883,
         username: str | None = None,
@@ -34,7 +35,6 @@ class MQTTClient(BaseProtocolClient):
         self.password = password
         self.timeout = timeout
         self.hass = hass
-
         self._client: mqtt_client.Client | None = None
         self._connected = False
         
