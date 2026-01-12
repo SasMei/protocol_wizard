@@ -6,7 +6,6 @@ import asyncio
 import logging
 import json
 from typing import Any
-#from collections import defaultdict
 
 import paho.mqtt.client as mqtt_client
 
@@ -20,7 +19,6 @@ class MQTTClient(BaseProtocolClient):
 
     def __init__(
         self,
-        hass,
         broker: str,
         port: int = 1883,
         username: str | None = None,
@@ -34,7 +32,7 @@ class MQTTClient(BaseProtocolClient):
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.hass = hass
+
         self._client: mqtt_client.Client | None = None
         self._connected = False
         
@@ -76,28 +74,7 @@ class MQTTClient(BaseProtocolClient):
         """Callback when disconnected from broker."""
         _LOGGER.debug("MQTT disconnected from %s:%s (rc=%s)", self.broker, self.port, rc)
         self._connected = False
-        
-    async def subscribe(self, topic: str, callback):
-            """Subscribe to a topic with a specific callback."""
-            # If using Home Assistant's built-in MQTT component:
-            from homeassistant.components import mqtt
-            
-            _LOGGER.debug("Subscribing to topic: %s", topic)
-            
-            # mqtt.async_subscribe returns a 'remove_listener' function
-            self._subs[topic] = await mqtt.async_subscribe(
-                self.hass, 
-                topic, 
-                callback
-            )
 
-    async def unsubscribe(self, topic: str):
-        """Stop listening to a topic."""
-        if topic in self._subs:
-            _LOGGER.debug("Unsubscribing from topic: %s", topic)
-            self._subs[topic]() # Call the removal function
-            del self._subs[topic]
-            
     def _on_message(self, client, userdata, msg):
         """
         Callback when message received (event-driven!).
