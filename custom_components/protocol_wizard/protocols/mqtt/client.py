@@ -79,7 +79,10 @@ class MQTTClient(BaseProtocolClient):
         """
         Callback when message received (event-driven!).
         This runs continuously in background, caching ALL messages.
+        NOTE: This runs in paho-mqtt's thread, not asyncio!
         """
+        import time
+        
         topic = msg.topic
         
         try:
@@ -99,7 +102,7 @@ class MQTTClient(BaseProtocolClient):
             "payload": payload_data,
             "qos": msg.qos,
             "retain": msg.retain,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": time.time(),  # ✅ Use time.time() not asyncio
         }
         
         _LOGGER.debug("Cached message for topic %s: %s", topic, payload_data)
