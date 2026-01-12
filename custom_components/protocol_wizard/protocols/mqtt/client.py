@@ -234,17 +234,32 @@ class MQTTClient(BaseProtocolClient):
             _LOGGER.debug("Returning cached value for %s", topic)
             return cached
         
-        # Not cached - subscribe temporarily and wait
+        # Not cached - subscribe and wait for message
         _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
         
         # Subscribe (will start caching messages)
-        await self.subscribe_persistent(topic)
+        success = await self.subscribe_persistent(topic)
+        if not success:
+            _LOGGER.error("Failed to subscribe to %s", topic)
+            return None
         
-        # Wait for message to arrive
+        # IMPORTANT: Give broker time to send retained message!
+        # Retained messages arrive quickly, but not instantly
+        await asyncio.sleep(0.5)  # 500ms should be plenty
+        
+        # Check cache immediately after subscribe (retained message should be here)
+        cached = self.get_cached_message(topic)
+        if cached is not None:
+            _LOGGER.info("Got retained message for %s immediately after subscribe", topic)
+            return cached
+        
+        # No retained message - wait for live message
+        _LOGGER.debug("No retained message for %s, waiting for live message", topic)
         deadline = asyncio.get_event_loop().time() + wait_time
         while asyncio.get_event_loop().time() < deadline:
             cached = self.get_cached_message(topic)
             if cached is not None:
+                _LOGGER.info("Got live message for %s", topic)
                 return cached
             await asyncio.sleep(0.1)
         
