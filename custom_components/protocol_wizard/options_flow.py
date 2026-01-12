@@ -294,7 +294,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"base": "template_empty_or_duplicate"},
                 )
             
-            return await self.async_step_list_entities()
+            self._save_entities()
+            return self.async_create_entry(title="", data={})
         
         # Get templates for dropdown
         templates = await get_available_templates(self.hass, self.protocol)
