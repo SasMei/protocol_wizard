@@ -1,7 +1,8 @@
 ## Changelog
 
 ### [0.6.0] - MQTT added
-- Adding MQTT protocol support 
+- Adding MQTT protocol support
+- Includes full read / write with card
   
 ### [0.5.0] - Entity creation from card
 - Adds ability to create entity right from the card after successfull read
