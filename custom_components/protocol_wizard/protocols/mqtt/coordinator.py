@@ -1,5 +1,5 @@
 # custom_components/protocol_wizard/protocols/mqtt/coordinator.py
-"""MQTT protocol coordinator implementation."""
+"""MQTT protocol coordinator implementation - Event-Driven Architecture."""
 from __future__ import annotations
 
 import logging
@@ -14,14 +14,15 @@ from homeassistant.config_entries import ConfigEntry
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import MQTTClient
-from ...const import CONF_ENTITIES,CONF_PROTOCOL_MQTT
+from ...const import CONF_ENTITIES, CONF_PROTOCOL_MQTT
 from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
 
-@ProtocolRegistry.register(CONF_PROTOCOL_MQTT )
+
+@ProtocolRegistry.register(CONF_PROTOCOL_MQTT)
 class MQTTCoordinator(BaseProtocolCoordinator):
-    """MQTT protocol coordinator."""
+    """MQTT protocol coordinator with event-driven pub/sub."""
 
     def __init__(
         self,
@@ -38,11 +39,16 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             update_interval=update_interval,
             name="MQTT Monitor",
         )
-        self.protocol_name = CONF_PROTOCOL_MQTT 
+        self.protocol_name = CONF_PROTOCOL_MQTT
         self._lock = asyncio.Lock()
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch latest data from configured MQTT entities."""
+        """
+        Fetch latest data from configured MQTT entities.
+        
+        Event-Driven: Just reads from cache, no waiting!
+        Messages arrive continuously in background via _on_message callback.
+        """
         if not await self._async_connect():
             _LOGGER.warning("[MQTT] Could not connect to broker")
             return {}
@@ -55,42 +61,51 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         if not entities:
             return {}
 
+        # Ensure all entity topics are subscribed (persistent, event-driven)
+        await self._ensure_subscriptions(entities)
+
         new_data = {}
 
-        async with self._lock:
-            # Get all topics to subscribe
-            topics = [entity["address"] for entity in entities]
+        # Just read from cache - instant, no waiting!
+        for entity in entities:
+            key = topic_key(entity["name"])
+            topic = entity["address"]
             
-            # Subscribe to all topics and get current values
-            topic_values = await self.client.subscribe_multiple(topics)
-            
-            for entity in entities:
-                key = topic_key(entity["name"])
-                topic = entity["address"]
+            try:
+                # Get cached value (instant!)
+                payload = self.client.get_cached_message(topic)
                 
-                try:
-                    payload = topic_values.get(topic)
-                    
-                    if payload is None:
-                        new_data[key] = None
-                        continue
-                    
-                    # Decode the value
-                    decoded = self._decode_value(payload, entity)
-                    new_data[key] = decoded
-                    
-                    # Store raw for debugging
-                    new_data[f"{key}_raw"] = payload
-                    
-                except Exception as err:
-                    _LOGGER.warning(
-                        "Failed to read MQTT topic %s: %s",
-                        topic,
-                        err,
-                    )
+                if payload is None:
                     new_data[key] = None
+                    continue
+                
+                # Decode the value
+                decoded = self._decode_value(payload, entity)
+                new_data[key] = decoded
+                
+                # Store raw for debugging
+                new_data[f"{key}_raw"] = payload
+                
+            except Exception as err:
+                _LOGGER.warning(
+                    "Failed to read MQTT topic %s: %s",
+                    topic,
+                    err,
+                )
+                new_data[key] = None
 
         return new_data
+    
+    async def _ensure_subscriptions(self, entities: list[dict]) -> None:
+        """
+        Ensure all entity topics are subscribed (persistent, event-driven).
+        Subscriptions persist across coordinator polls.
+        """
+        topics = [entity["address"] for entity in entities]
+        for topic in topics:
+            # Subscribe if not already subscribed
+            # Client tracks subscriptions and caches messages automatically
+            await self.client.subscribe_persistent(topic)
         
     def _expects_numeric(self, entity_config: dict) -> bool:
         return bool(
@@ -270,7 +285,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         **kwargs,
     ) -> Any:
         """
-        Read a single MQTT topic.
+        Read a single MQTT topic (for services/card).
         
         Args:
             address: MQTT topic
@@ -282,10 +297,13 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         
         try:
             wait_time = kwargs.get("wait_time", 5.0)
-            _LOGGER.debug("[MQTT] About to read value %s", address)
+            _LOGGER.debug("[MQTT] Reading topic %s (wait_time=%.1f)", address, wait_time)
+            
+            # Client handles cache lookup + temporary subscription if needed
             payload = await self.client.read(address, wait_time=wait_time)
             
             if payload is None:
+                _LOGGER.warning("[MQTT] No message received on %s", address)
                 return None
             
             return self._decode_value(payload, entity_config)
@@ -330,7 +348,10 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             else:
                 # Convert to string
                 value = str(value)
-            _LOGGER.debug("[MQTT] About to write to %s with value %s (qos:%d,retain:%d)", address, value,qos,retain)
+            
+            _LOGGER.debug("[MQTT] Publishing to %s: %s (qos=%d, retain=%s)", 
+                         address, value, qos, retain)
+            
             return await self.client.write(
                 address,
                 value,
