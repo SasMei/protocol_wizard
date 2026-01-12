@@ -1,12 +1,12 @@
 # custom_components/protocol_wizard/protocols/mqtt/client.py
-"""MQTT protocol client implementation."""
+"""MQTT protocol client implementation - Event-Driven Architecture."""
 from __future__ import annotations
 
 import asyncio
 import logging
 import json
 from typing import Any
-# from collections import defaultdict
+from collections import defaultdict
 
 import paho.mqtt.client as mqtt_client
 
@@ -14,13 +14,9 @@ from ..base import BaseProtocolClient
 
 _LOGGER = logging.getLogger(__name__)
 
-# Reduce noise from pymodbus
-# Setting parent logger to CRITICAL to catch all sub-loggers
-logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
-logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class MQTTClient(BaseProtocolClient):
-    """MQTT client wrapper for Protocol Wizard."""
+    """MQTT client with event-driven pub/sub architecture."""
 
     def __init__(
         self,
@@ -40,8 +36,13 @@ class MQTTClient(BaseProtocolClient):
 
         self._client: mqtt_client.Client | None = None
         self._connected = False
-        self._subscriptions: dict[str, Any] = {}  # topic -> last_message
-        self._subscribe_futures: dict[str, asyncio.Future] = {}
+        
+        # Message cache: topic -> {payload, qos, retain, timestamp}
+        self._message_cache: dict[str, dict] = {}
+        
+        # Track subscribed topics (persistent subscriptions)
+        self._subscribed_topics: set[str] = set()
+        
         self._lock = asyncio.Lock()
         
         # Generate client ID
@@ -54,8 +55,18 @@ class MQTTClient(BaseProtocolClient):
     def _on_connect(self, client, userdata, flags, rc):
         """Callback when connected to broker."""
         if rc == 0:
-            _LOGGER.debug("MQTT connected to %s:%s", self.broker, self.port)
+            _LOGGER.info("MQTT connected to %s:%s", self.broker, self.port)
             self._connected = True
+            
+            # Resubscribe to all topics on reconnect
+            if self._subscribed_topics:
+                _LOGGER.info("Resubscribing to %d topics", len(self._subscribed_topics))
+                for topic in self._subscribed_topics:
+                    try:
+                        self._client.subscribe(topic, qos=0)
+                        _LOGGER.debug("Resubscribed to %s", topic)
+                    except Exception as err:
+                        _LOGGER.error("Failed to resubscribe to %s: %s", topic, err)
         else:
             _LOGGER.error("MQTT connection failed with code %s", rc)
             self._connected = False
@@ -66,7 +77,10 @@ class MQTTClient(BaseProtocolClient):
         self._connected = False
 
     def _on_message(self, client, userdata, msg):
-        """Callback when message received."""
+        """
+        Callback when message received (event-driven!).
+        This runs continuously in background, caching ALL messages.
+        """
         topic = msg.topic
         
         try:
@@ -81,24 +95,21 @@ class MQTTClient(BaseProtocolClient):
             # Binary data
             payload_data = msg.payload.hex()
         
-        # Store message
-        self._subscriptions[topic] = {
+        # Cache the message (this is the key!)
+        self._message_cache[topic] = {
             "payload": payload_data,
             "qos": msg.qos,
             "retain": msg.retain,
             "timestamp": asyncio.get_event_loop().time(),
         }
         
-        # Resolve any waiting futures
-        if topic in self._subscribe_futures:
-            future = self._subscribe_futures.pop(topic)
-            if not future.done():
-                future.set_result(payload_data)
+        _LOGGER.debug("Cached message for topic %s: %s", topic, payload_data)
 
     async def connect(self) -> bool:
-        """Establish connection to MQTT broker."""
+        """Establish connection to MQTT broker and start background loop."""
         try:
             if self._client is None:
+                # Use CallbackAPIVersion.VERSION1 for compatibility with paho-mqtt 2.x
                 self._client = mqtt_client.Client(
                     client_id=self._client_id,
                     callback_api_version=mqtt_client.CallbackAPIVersion.VERSION1
@@ -114,13 +125,14 @@ class MQTTClient(BaseProtocolClient):
             # Connect in thread-safe way
             def do_connect():
                 self._client.connect(self.broker, self.port, keepalive=60)
-                self._client.loop_start()
+                self._client.loop_start()  # ✅ Start background message receiver!
             
             await asyncio.get_event_loop().run_in_executor(None, do_connect)
             
             # Wait for connection
             for _ in range(int(self.timeout * 10)):
                 if self._connected:
+                    _LOGGER.info("MQTT background loop started successfully")
                     return True
                 await asyncio.sleep(0.1)
             
@@ -133,7 +145,7 @@ class MQTTClient(BaseProtocolClient):
             return False
 
     async def disconnect(self) -> None:
-        """Disconnect from MQTT broker."""
+        """Close connection and stop background loop."""
         if self._client:
             try:
                 def do_disconnect():
@@ -141,59 +153,104 @@ class MQTTClient(BaseProtocolClient):
                     self._client.disconnect()
                 
                 await asyncio.get_event_loop().run_in_executor(None, do_disconnect)
+                _LOGGER.info("MQTT disconnected and loop stopped")
             except Exception as err:
-                _LOGGER.debug("Error disconnecting MQTT client: %s", err)
-            finally:
-                self._client = None
-                self._connected = False
-                self._subscriptions.clear()
+                _LOGGER.error("Error during MQTT disconnect: %s", err)
+            
+            self._connected = False
 
-    async def read(self, address: str, **kwargs) -> Any:
+    async def subscribe_persistent(self, topic: str, qos: int = 0) -> bool:
         """
-        Subscribe to MQTT topic and wait for message.
+        Subscribe to topic persistently (event-driven).
+        Messages are automatically cached by _on_message callback.
         
         Args:
-            address: MQTT topic to subscribe to
-            wait_time: How long to wait for message (default: 5 seconds)
-        
+            topic: MQTT topic (can use wildcards: + or #)
+            qos: Quality of Service
+            
         Returns:
-            Last received message payload or waits for new message
+            True if subscribed successfully
         """
         if not self._connected:
-            raise ConnectionError("MQTT client not connected")
+            _LOGGER.warning("Cannot subscribe - not connected")
+            return False
         
+        # Already subscribed?
+        if topic in self._subscribed_topics:
+            _LOGGER.debug("Already subscribed to %s", topic)
+            return True
+        
+        try:
+            def do_subscribe():
+                result = self._client.subscribe(topic, qos=qos)
+                return result[0] == mqtt_client.MQTT_ERR_SUCCESS
+            
+            success = await asyncio.get_event_loop().run_in_executor(None, do_subscribe)
+            
+            if success:
+                self._subscribed_topics.add(topic)
+                _LOGGER.info("Subscribed to %s (persistent)", topic)
+                return True
+            else:
+                _LOGGER.error("Failed to subscribe to %s", topic)
+                return False
+                
+        except Exception as err:
+            _LOGGER.error("MQTT subscribe error: %s", err)
+            return False
+
+    def get_cached_message(self, topic: str) -> Any | None:
+        """
+        Get cached message for topic (instant!).
+        
+        Args:
+            topic: MQTT topic
+            
+        Returns:
+            Cached payload or None if no message received yet
+        """
+        cached = self._message_cache.get(topic)
+        if cached:
+            return cached["payload"]
+        return None
+
+    async def read(self, address: str, **kwargs) -> Any | None:
+        """
+        Read from MQTT topic (for card/services).
+        For one-time reads, subscribe temporarily and wait for message.
+        
+        Args:
+            address: MQTT topic
+            wait_time: How long to wait for message
+            
+        Returns:
+            Payload or None
+        """
         topic = address
         wait_time = kwargs.get("wait_time", 5.0)
         
-        # Check if we already have a cached message
-        if topic in self._subscriptions:
-            cached = self._subscriptions[topic]
-            # Return cached if recent (within 60 seconds)
-            if asyncio.get_event_loop().time() - cached["timestamp"] < 60:
-                return cached["payload"]
+        # Check if already cached (from persistent subscription)
+        cached = self.get_cached_message(topic)
+        if cached is not None:
+            _LOGGER.debug("Returning cached value for %s", topic)
+            return cached
         
-        # Subscribe and wait for new message
-        async with self._lock:
-            future = asyncio.Future()
-            self._subscribe_futures[topic] = future
-            
-            def do_subscribe():
-                self._client.subscribe(topic)
-            
-            await asyncio.get_event_loop().run_in_executor(None, do_subscribe)
+        # Not cached - subscribe temporarily and wait
+        _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
         
-        try:
-            # Wait for message
-            payload = await asyncio.wait_for(future, timeout=wait_time)
-            return payload
-        except asyncio.TimeoutError:
-            # Return cached message if available
-            if topic in self._subscriptions:
-                return self._subscriptions[topic]["payload"]
-            return None
-        finally:
-            # Clean up future
-            self._subscribe_futures.pop(topic, None)
+        # Subscribe (will start caching messages)
+        await self.subscribe_persistent(topic)
+        
+        # Wait for message to arrive
+        deadline = asyncio.get_event_loop().time() + wait_time
+        while asyncio.get_event_loop().time() < deadline:
+            cached = self.get_cached_message(topic)
+            if cached is not None:
+                return cached
+            await asyncio.sleep(0.1)
+        
+        _LOGGER.warning("No message received on %s after %.1fs", topic, wait_time)
+        return None
 
     async def write(self, address: str, value: Any, **kwargs) -> bool:
         """
@@ -242,7 +299,7 @@ class MQTTClient(BaseProtocolClient):
                 return False
             
             if success:
-                _LOGGER.debug("Published to %s: %s", topic, payload)
+                _LOGGER.debug("Published to %s: %s (qos=%d, retain=%s)", topic, payload, qos, retain)
             else:
                 _LOGGER.error("Failed to publish to %s", topic)
             
@@ -252,43 +309,15 @@ class MQTTClient(BaseProtocolClient):
             _LOGGER.error("MQTT publish error: %s", err)
             return False
 
-    async def subscribe_multiple(self, topics: list[str]) -> dict[str, Any]:
-        """
-        Subscribe to multiple topics and return current values.
-        
-        Args:
-            topics: List of MQTT topics
-        
-        Returns:
-            Dict of topic -> payload
-        """
-        if not self._connected:
-            raise ConnectionError("MQTT client not connected")
-        
-        def do_subscribe():
-            for topic in topics:
-                self._client.subscribe(topic)
-        
-        await asyncio.get_event_loop().run_in_executor(None, do_subscribe)
-        
-        # Wait a bit for messages
-        await asyncio.sleep(0.5)
-        
-        # Return current subscriptions
-        return {
-            topic: self._subscriptions.get(topic, {}).get("payload")
-            for topic in topics
-        }
-
     @property
     def is_connected(self) -> bool:
-        """Return connection status."""
-        return self._connected and self._client is not None
-
-    def get_subscribed_topics(self) -> list[str]:
-        """Get list of currently subscribed topics."""
-        return list(self._subscriptions.keys())
-
-    def get_topic_data(self, topic: str) -> dict[str, Any] | None:
-        """Get full data for a topic including QoS and retain flag."""
-        return self._subscriptions.get(topic)
+        """Connection status."""
+        return self._connected
+    
+    def get_subscription_count(self) -> int:
+        """Get number of active subscriptions."""
+        return len(self._subscribed_topics)
+    
+    def get_cache_size(self) -> int:
+        """Get number of cached messages."""
+        return len(self._message_cache)
