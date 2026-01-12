@@ -645,7 +645,11 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         handle_read_mqtt,
         supports_response=SupportsResponse.OPTIONAL,
     )
-
+    hass.services.async_register(
+        DOMAIN,
+        "write_mqtt",
+        handle_write_mqtt,
+    )
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
