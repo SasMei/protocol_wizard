@@ -43,6 +43,9 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         )
         self.protocol_name = CONF_PROTOCOL_MQTT
         self._lock = asyncio.Lock()
+        entities = config_entry.options.get(CONF_ENTITIES, [])
+        if entities:
+            hass.async_create_task(self._ensure_subscriptions(entities))
 
     async def _async_update_data(self) -> dict[str, Any]:
         """
@@ -280,39 +283,45 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                 return None  # Return None for numeric entities
             return value  # Return original for non-numeric
 
-    async def async_read_entity(
-        self,
-        address: str,
-        entity_config: dict,
-        **kwargs,
-    ) -> Any:
-        """
-        Read a single MQTT topic (for services/card).
-        
-        Args:
-            address: MQTT topic
-            entity_config: Entity configuration
-            wait_time: How long to wait for message
-        """
+    async def async_read_entity(self, address: str, entity_config: dict, **kwargs) -> Any:
+        """Read a single MQTT topic (handles both cached and one-off reads)."""
         if not await self._async_connect():
             return None
+    
+        wait_time = kwargs.get("wait_time", 5.0)
         
-        try:
-            wait_time = kwargs.get("wait_time", 5.0)
-            _LOGGER.debug("[MQTT] Reading topic %s (wait_time=%.1f)", address, wait_time)
-            
-            # Client handles cache lookup + temporary subscription if needed
-            payload = await self.client.read(address, wait_time=wait_time)
-            
-            if payload is None:
-                _LOGGER.warning("[MQTT] No message received on %s", address)
-                return None
-            
+        # 1. Check if we already have it in cache
+        payload = self.client.get_cached_message(address)
+        if payload is not None:
             return self._decode_value(payload, entity_config)
-            
-        except Exception as err:
-            _LOGGER.error("Failed to read MQTT topic %s: %s", address, err)
+    
+        # 2. If not in cache, we need to listen for it specifically
+        _LOGGER.debug("[MQTT] Topic %s not in cache, performing one-off listen", address)
+        
+        # This 'future' will be resolved when the message arrives
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+    
+        def single_msg_callback(topic, payload, qos, retain):
+            if topic == address and not future.done():
+                future.set_result(payload)
+    
+        # Subscribe temporarily
+        await self.client.subscribe(address, single_msg_callback)
+    
+        try:
+            # Wait for the message to arrive
+            raw_payload = await asyncio.wait_for(future, timeout=wait_time)
+            return self._decode_value(raw_payload, entity_config)
+        except asyncio.TimeoutError:
+            _LOGGER.warning("[MQTT] Timeout waiting for message on %s", address)
             return None
+        finally:
+            # Important: Unsubscribe if this isn't a persistent entity topic
+            # to avoid memory leaks and unnecessary traffic
+            is_persistent = any(e["address"] == address for e in self.my_config_entry.options.get(CONF_ENTITIES, []))
+            if not is_persistent:
+                await self.client.unsubscribe(address)
 
     async def async_write_entity(
         self,
