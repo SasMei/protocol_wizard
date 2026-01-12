@@ -18,7 +18,9 @@ from ...const import CONF_ENTITIES, CONF_PROTOCOL_MQTT
 from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
-
+# Reduce noise from HA
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("homeassistant.helpers.update_coordinator").setLevel(logging.CRITICAL)
 
 @ProtocolRegistry.register(CONF_PROTOCOL_MQTT)
 class MQTTCoordinator(BaseProtocolCoordinator):
