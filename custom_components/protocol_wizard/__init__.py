@@ -4,7 +4,6 @@
 """The Protocol Wizard integration."""
 import shutil
 import logging
-import json
 import os
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
