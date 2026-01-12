@@ -505,16 +505,24 @@ class ProtocolWizardSelectBase(CoordinatorEntity, SelectEntity):
             )
             return
         
-        # Convert to appropriate type
-        register_type = self._config.get("register_type", "holding").lower()
+        # Protocol-specific value conversion
+        protocol = self.coordinator.protocol_name
         
-        # For coils/discrete (bit types), convert to boolean
-        if register_type in ("coil", "discrete"):
-            value = bool(int(float(value)))  # "0" → False, "1" → True
-        elif "float" not in self.data_type:
-            value = int(round(float(value)))  # Regular registers
+        if protocol == "mqtt":
+            # MQTT: Send value as-is (string payload)
+            # Don't convert to numeric!
+            pass  # value stays as string
         else:
-            value = float(value)  # Float registers
+            # Modbus/SNMP: Convert to numeric
+            register_type = self._config.get("register_type", "holding").lower()
+            
+            # For coils/discrete (bit types), convert to boolean
+            if register_type in ("coil", "discrete"):
+                value = bool(int(float(value)))  # "0" → False, "1" → True
+            elif "float" not in self.data_type:
+                value = int(round(float(value)))  # Regular registers
+            else:
+                value = float(value)  # Float registers
         
         # Use coordinator's write method
         success = await self.coordinator.async_write_entity(
@@ -527,7 +535,6 @@ class ProtocolWizardSelectBase(CoordinatorEntity, SelectEntity):
             await self.coordinator.async_request_refresh()
         else:
             _LOGGER.error("Failed to write value to %s", self._config.get("name"))
-
 
 class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
     """Hub status entity - shows connection state."""

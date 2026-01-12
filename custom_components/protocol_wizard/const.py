@@ -45,6 +45,7 @@ CONF_ENTITIES = "entities"  # Standard key for most protocols
 CONF_REGISTERS = "registers"
 CONF_PROTOCOL_MODBUS = "modbus"
 CONF_PROTOCOL_SNMP = "snmp"
+CONF_PROTOCOL_MQTT = "mqtt"
 CONF_PROTOCOL = "protocol"
 CONF_IP = "IP"
 

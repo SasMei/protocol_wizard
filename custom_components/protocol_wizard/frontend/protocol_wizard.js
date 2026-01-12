@@ -42,6 +42,12 @@ class ProtocolWizardCard extends LitElement {
       _newEntityFormat: { type: String },
       _newEntityIcon: { type: String },
       _createEntityStatus: { type: String },
+      // MQTT
+      _mqttTopic: { type: String },
+      _mqttPayload: { type: String },
+      _mqttQos: { type: Number },
+      _mqttRetain: { type: Boolean },
+      _mqttWaitTime: { type: Number },
     };
   }
 
@@ -82,6 +88,12 @@ class ProtocolWizardCard extends LitElement {
     this._newEntityFormat = "";
     this._newEntityIcon = "";
     this._createEntityStatus = "";
+    // MQTT defaults (NEW)
+    this._mqttTopic = "home/sensor/test";
+    this._mqttPayload = "";
+    this._mqttQos = 0;
+    this._mqttRetain = false;
+    this._mqttWaitTime = 5.0;
   }
 
   static getConfigElement() {
@@ -188,6 +200,7 @@ class ProtocolWizardCard extends LitElement {
 
     if (entities.some(eid => eid.endsWith("_modbus_hub"))) return "modbus";
     if (entities.some(eid => eid.endsWith("_snmp_hub"))) return "snmp";
+    if (entities.some(eid => eid.endsWith("_mqtt_hub"))) return "mqtt";
 
     return "unknown";
   }
@@ -324,6 +337,8 @@ class ProtocolWizardCard extends LitElement {
         await this._sendModbusRead(targetEntity);
       } else if (this._protocol === "snmp") {
         await this._sendSnmpRead(targetEntity);
+      } else if (this._protocol === "mqtt") { 
+        await this._sendMqttRead(targetEntity);
       }
       this._lastReadSuccess = true; // Mark success
     } catch (err) {
@@ -369,6 +384,7 @@ class ProtocolWizardCard extends LitElement {
       byte_order: this._modbusByteOrder,
       word_order: this._modbusWordOrder,
       value: result?.value ?? result?.response?.value ?? null,
+      raw: result?.value ?? result?.response?.value ?? null,  // Store for table
     };
 
     let displayValue = "";
@@ -400,13 +416,27 @@ class ProtocolWizardCard extends LitElement {
       displayValue = `HEX: ${hex}\nASCII: ${ascii}\nBinary: ${binary}`;
       if (bitsView) displayValue += `\n${bitsView}`;
       if (rawData.detected_type) displayValue += `\nType: ${rawData.detected_type}`;
+      
+      // Store parsed data for table
+      this._lastReadData.table = {
+        hex: hex,
+        ascii: ascii,
+        binary: binary,
+        bits: bitsView,
+        detected_type: rawData.detected_type,
+      };
     } else {
       const value = result?.value ?? result?.response?.value ?? null;
       displayValue = value !== null ? String(value) : "No value";
+      
+      // Store for table
+      this._lastReadData.table = {
+        value: displayValue,
+      };
     }
 
     this._writeValue = displayValue;
-    this._status = "Read OK";
+    this._selectedStatus = "Read OK";
     this.requestUpdate();
   }
 
@@ -471,6 +501,8 @@ class ProtocolWizardCard extends LitElement {
         await this._sendModbusWrite(targetEntity);
       } else if (this._protocol === "snmp") {
         await this._sendSnmpWrite(targetEntity);
+      } else if (this._protocol === "mqtt") {
+        await this._sendMqttWrite(targetEntity);
       }
     } catch (err) {
       console.error("Write error:", err);
@@ -612,6 +644,13 @@ class ProtocolWizardCard extends LitElement {
           data_type: this._lastReadData.data_type,
           read_mode: this._newEntityReadMode || "get",
         };
+      } else if (this._protocol === "mqtt") {  // NEW
+        serviceData = {
+          ...serviceData,
+          data_type: "string",  // Default, user can change later
+          qos: this._mqttQos,
+          retain: this._mqttRetain,
+        };
       }
 
       // Call the add_entity service
@@ -637,6 +676,70 @@ class ProtocolWizardCard extends LitElement {
       this._createEntityStatus = `Failed: ${err.message || err}`;
       this.requestUpdate();
     }
+  }
+
+  async _sendMqttRead(targetEntity) {
+    if (!this._mqttTopic) {
+        this._status = "Missing topic";
+        this.requestUpdate();
+        return;
+    }
+
+    const result = await this.hass.callWS({
+        type: "call_service",
+        domain: "protocol_wizard",
+        service: "read_mqtt",
+        service_data: {
+        entity_id: targetEntity,
+        topic: this._mqttTopic,
+        wait_time: this._mqttWaitTime,
+        },
+        return_response: true,
+    });
+
+    const value = result?.value ?? result?.response?.value ?? null;
+    
+    // Store read data for entity creation
+    this._lastReadData = {
+        address: this._mqttTopic,
+        data_type: "string",
+        value: value,
+    };
+    
+    this._writeValue = value !== null ? String(value) : "No value";
+    this._status = "Read OK";
+    this.requestUpdate();
+    }
+
+    // Add MQTT write method:
+    async _sendMqttWrite(targetEntity) {
+    if (!this._mqttTopic) {
+        this._status = "Missing topic";
+        this.requestUpdate();
+        return;
+    }
+
+    if (!this._writeValue) {
+        this._status = "Missing payload";
+        this.requestUpdate();
+        return;
+    }
+
+    await this.hass.callWS({
+        type: "call_service",
+        domain: "protocol_wizard",
+        service: "write_mqtt",
+        service_data: {
+        entity_id: targetEntity,
+        topic: this._mqttTopic,
+        payload: this._writeValue,
+        qos: this._mqttQos,
+        retain: this._mqttRetain,
+        },
+    });
+
+    this._status = "Published OK";
+    this.requestUpdate();
   }
 
   _renderCreateEntityButton() {
@@ -916,6 +1019,50 @@ class ProtocolWizardCard extends LitElement {
     `;
   }
 
+  _renderMqttFields() {
+    return html`
+        <div class="field-row">
+        <span class="label">Topic:</span>
+        <input
+            type="text"
+            placeholder="e.g. home/sensor/temperature"
+            .value=${this._mqttTopic}
+            @input=${e => this._mqttTopic = e.target.value}
+        />
+        </div>
+
+        <div class="field-row">
+        <span class="label">QoS:</span>
+        <select .value=${this._mqttQos} @change=${e => this._mqttQos = Number(e.target.value)}>
+            <option value="0">QoS 0 (At most once)</option>
+            <option value="1">QoS 1 (At least once)</option>
+            <option value="2">QoS 2 (Exactly once)</option>
+        </select>
+        </div>
+
+        <div class="field-row">
+        <span class="label">Wait Time (s):</span>
+        <input
+            type="number"
+            placeholder="5"
+            min="1"
+            max="60"
+            step="0.5"
+            .value=${this._mqttWaitTime}
+            @input=${e => this._mqttWaitTime = Number(e.target.value)}
+        />
+        </div>
+
+        <div class="field-row checkbox-row">
+        <span class="label">Retain:</span>
+        <label>
+            <input type="checkbox" @change=${e => this._mqttRetain = e.target.checked} ?checked=${this._mqttRetain} />
+            Retain message on broker
+        </label>
+        </div>
+    `;
+  }
+  
   render() {
     if (!this.hass || !this.config) return html``;
 
@@ -940,7 +1087,10 @@ class ProtocolWizardCard extends LitElement {
             </div>
 
             <!-- Protocol-specific fields -->
-            ${protocol === "modbus" ? this._renderModbusFields() : this._renderSnmpFields()}
+            ${protocol === "modbus" ? this._renderModbusFields() :
+            protocol === "snmp" ? this._renderSnmpFields() :
+            protocol === "mqtt" ? this._renderMqttFields() :
+            html`<div class="error">Unknown protocol</div>`}
 
             <!-- Value field with view mode toggle -->
             ${this._viewMode === "text" ? html`

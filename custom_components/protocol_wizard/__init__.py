@@ -4,6 +4,9 @@
 """The Protocol Wizard integration."""
 import shutil
 import logging
+import json
+import os
+
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -12,9 +15,11 @@ from pymodbus.client import AsyncModbusSerialClient, AsyncModbusTcpClient, Async
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.service import SupportsResponse
 from datetime import timedelta
+# Import protocol registry and plugins
+from .protocols import ProtocolRegistry
+from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
-import json
-import os
+from .protocols.mqtt import MQTTClient
 
 from .const import (
     CONF_BAUDRATE,
@@ -39,6 +44,7 @@ from .const import (
     DOMAIN,
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
+    CONF_PROTOCOL_MQTT,
     CONF_PROTOCOL,
     CONF_TEMPLATE,
     CONF_TEMPLATE_APPLIED,
@@ -46,9 +52,6 @@ from .const import (
     CONF_REGISTERS,
 )
 
-# Import protocol registry and plugins
-from .protocols import ProtocolRegistry
-from .protocols.modbus import ModbusClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -136,6 +139,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             client = await _create_modbus_client(hass, config, entry)
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
+        elif protocol_name == CONF_PROTOCOL_MQTT:
+            client = _create_mqtt_client(config)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
@@ -297,6 +302,18 @@ def _create_snmp_client(config: dict) -> SNMPClient:
         port=config.get(CONF_PORT, 161),
         community=config.get("community", "public"),
         version=config.get("version", "2c"),
+    )
+    
+def _create_mqtt_client(config: dict) -> MQTTClient:
+    """Create MQTT client (no caching needed - manages its own connection)."""
+    from .protocols.mqtt import MQTTClient, CONF_BROKER, CONF_USERNAME, CONF_PASSWORD, DEFAULT_PORT
+    
+    return MQTTClient(
+        broker=config[CONF_BROKER],
+        port=config.get(CONF_PORT, DEFAULT_PORT),
+        username=config.get(CONF_USERNAME) or None,
+        password=config.get(CONF_PASSWORD) or None,
+        timeout=10.0,
     )
 
 async def async_setup_services(hass: HomeAssistant) -> None:
@@ -554,6 +571,54 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         if not success:
             raise HomeAssistantError(f"Failed to write to OID {oid}")
+
+    async def handle_read_mqtt(call: ServiceCall):
+        """MQTT read service."""
+        coordinator = _get_coordinator(call)
+        
+        topic = call.data["topic"]
+        wait_time = call.data.get("wait_time", 5.0)
+        
+        entity_config = {
+            "data_type": "string",  # Default to string
+        }
+        
+        value = await coordinator.async_read_entity(
+            address=topic,
+            entity_config=entity_config,
+            wait_time=wait_time,
+        )
+        
+        if value is None:
+            raise HomeAssistantError(f"Failed to read MQTT topic {topic} (timeout or no data)")
+        
+        return {"value": value}
+    
+    async def handle_write_mqtt(call: ServiceCall):
+        """MQTT write/publish service."""
+        coordinator = _get_coordinator(call)
+        
+        topic = call.data["topic"]
+        payload = call.data["payload"]
+        qos = int(call.data.get("qos", 0))
+        retain = call.data.get("retain", False)
+        
+        entity_config = {
+            "data_type": "string",
+        }
+        
+        success = await coordinator.async_write_entity(
+            address=topic,
+            value=payload,
+            entity_config=entity_config,
+            qos=qos,
+            retain=retain,
+        )
+        
+        if not success:
+            raise HomeAssistantError(f"Failed to publish to MQTT topic {topic}")
+        
+        return {"success": True}
     
     hass.services.async_register(DOMAIN, "write_register", handle_write_register)
     hass.services.async_register(
@@ -573,6 +638,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN,
         "add_entity",
         handle_add_entity,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "read_mqtt",
+        handle_read_mqtt,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "write_mqtt",
+        handle_write_mqtt,
     )
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

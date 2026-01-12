@@ -12,7 +12,10 @@ from typing import Any
 from ..base import BaseProtocolClient
 
 _LOGGER = logging.getLogger(__name__)
-
+# Reduce noise from pymodbus
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class ModbusClient(BaseProtocolClient):
     """Wrapper for pymodbus clients to match BaseProtocolClient interface."""
