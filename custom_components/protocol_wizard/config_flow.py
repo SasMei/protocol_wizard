@@ -48,7 +48,10 @@ from .options_flow import ProtocolWizardOptionsFlow
 from .protocols import ProtocolRegistry
 
 _LOGGER = logging.getLogger(__name__)
-
+# Reduce noise from pymodbus
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
+logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
 
 class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle config flow for Protocol Wizard."""
