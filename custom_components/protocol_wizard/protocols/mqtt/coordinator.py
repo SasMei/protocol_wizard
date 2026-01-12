@@ -73,7 +73,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                     payload = topic_values.get(topic)
                     
                     if payload is None:
-                        new_data[key] = "No data"
+                        new_data[key] = None
                         continue
                     
                     # Decode the value
@@ -89,10 +89,16 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                         topic,
                         err,
                     )
-                    new_data[key] = "Error"
+                    new_data[key] = None
 
         return new_data
-
+        
+    def _expects_numeric(self, entity_config: dict) -> bool:
+        return bool(
+            entity_config.get("device_class")
+            or entity_config.get("state_class")
+        )
+        
     def _decode_value(self, raw_value: Any, entity_config: dict) -> Any:
         """
         Decode MQTT payload based on entity configuration.
@@ -102,14 +108,27 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             entity_config: Entity configuration with data_type, format, etc.
         """
         data_type = entity_config.get("data_type", "string")
+        expects_numeric = self._expects_numeric(entity_config)
         
+        # If no raw data received, return None (HA will show as "unavailable")
+        if raw_value is None:
+            return None
+    
         try:
             # If already a dict/list (parsed JSON), handle accordingly
             if isinstance(raw_value, (dict, list)):
                 if data_type == "json":
-                    # Return as-is or formatted string
+                    # For JSON entities, return formatted string (unless numeric is required)
+                    if expects_numeric:
+                        # Try to extract numeric value from JSON
+                        if isinstance(raw_value, dict) and "value" in raw_value:
+                            return self._convert_to_type(raw_value["value"], data_type, expects_numeric)
+                        elif isinstance(raw_value, list) and len(raw_value) > 0:
+                            return self._convert_to_type(raw_value[0], data_type, expects_numeric)
+                        else:
+                            return None  # Can't extract numeric from complex JSON
                     return json.dumps(raw_value, indent=2)
-                elif data_type == "string":
+                elif data_type == "string" and not expects_numeric:
                     return json.dumps(raw_value)
                 else:
                     # Try to extract a number if needed
@@ -118,9 +137,12 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                     elif isinstance(raw_value, list) and len(raw_value) > 0:
                         value = raw_value[0]
                     else:
+                        # Can't extract value from complex structure
+                        if expects_numeric:
+                            return None
                         return str(raw_value)
                     
-                    return self._convert_to_type(value, data_type)
+                    return self._convert_to_type(value, data_type, expects_numeric)
             
             # String payload
             if isinstance(raw_value, str):
@@ -128,22 +150,43 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                 if data_type == "json":
                     try:
                         parsed = json.loads(raw_value)
+                        if expects_numeric:
+                            # Extract numeric from parsed JSON
+                            if isinstance(parsed, (int, float)):
+                                return parsed
+                            elif isinstance(parsed, dict) and "value" in parsed:
+                                return self._convert_to_type(parsed["value"], data_type, expects_numeric)
+                            else:
+                                return None
                         return json.dumps(parsed, indent=2)
                     except json.JSONDecodeError:
+                        if expects_numeric:
+                            return None  # Invalid JSON for numeric entity
                         return raw_value
                 
                 # Convert to appropriate type
-                return self._convert_to_type(raw_value, data_type)
+                return self._convert_to_type(raw_value, data_type, expects_numeric)
             
             # Hex string (binary data)
             if isinstance(raw_value, bytes):
+                if expects_numeric:
+                    return None  # Binary data can't be numeric
                 return raw_value.hex()
             
+            # If we got here with a numeric value directly (int/float)
+            if isinstance(raw_value, (int, float)):
+                return raw_value
+            
+            # Fallback
+            if expects_numeric:
+                return None
             return raw_value
             
         except Exception as err:
             _LOGGER.warning("Failed to decode value: %s", err)
-            return str(raw_value)
+            # If numeric entity, return None on error (shows as unavailable)
+            # Otherwise return None to avoid invalid state
+            return None
             
     def _encode_value(self, raw_value: Any, entity_config: dict) -> Any:
         """
@@ -190,7 +233,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             _LOGGER.warning("Failed to encode value %s as %s: %s", raw_value, data_type, err)
             return str(raw_value)
             
-    def _convert_to_type(self, value: Any, data_type: str) -> Any:
+    def _convert_to_type(self, value: Any, data_type: str, expects_numeric: bool = False) -> Any:
         """Convert value to specified data type."""
         try:
             if data_type == "integer":
@@ -202,6 +245,12 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                     return value.lower() in ("true", "1", "on", "yes")
                 return bool(value)
             elif data_type == "string":
+                if expects_numeric:
+                    # Try to convert string to number for numeric entities
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return None  # Can't convert to number
                 return str(value)
             elif data_type == "json":
                 if isinstance(value, str):
@@ -210,7 +259,10 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             else:
                 return value
         except (ValueError, TypeError):
-            return value
+            # Conversion failed
+            if expects_numeric:
+                return None  # Return None for numeric entities
+            return value  # Return original for non-numeric
 
     async def async_read_entity(
         self,
