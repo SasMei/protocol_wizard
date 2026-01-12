@@ -15,7 +15,10 @@ from .client import SNMPClient
 from .const import CONF_ENTITIES, oid_key
 
 _LOGGER = logging.getLogger(__name__)
-
+# Reduce noise from HA
+# Setting parent logger to CRITICAL to catch all sub-loggers
+logging.getLogger("homeassistant").setLevel(logging.CRITICAL)
+logging.getLogger("homeassistant.helpers").setLevel(logging.CRITICAL)
 
 @ProtocolRegistry.register("snmp")
 class SNMPCoordinator(BaseProtocolCoordinator):
