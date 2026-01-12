@@ -19,11 +19,6 @@ from .const import topic_key
 
 _LOGGER = logging.getLogger(__name__)
 
-# Reduce noise from pymodbus
-# Setting parent logger to CRITICAL to catch all sub-loggers
-logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
-logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
-
 @ProtocolRegistry.register(CONF_PROTOCOL_MQTT )
 class MQTTCoordinator(BaseProtocolCoordinator):
     """MQTT protocol coordinator."""
@@ -287,6 +282,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         
         try:
             wait_time = kwargs.get("wait_time", 5.0)
+            _LOGGER.debug("[MQTT] About to read value %s", address)
             payload = await self.client.read(address, wait_time=wait_time)
             
             if payload is None:
@@ -334,7 +330,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
             else:
                 # Convert to string
                 value = str(value)
-            
+            _LOGGER.debug("[MQTT] About to write to %s with value %s (qos:%d,retain:%d)", address, value,qos,retrain)
             return await self.client.write(
                 address,
                 value,
