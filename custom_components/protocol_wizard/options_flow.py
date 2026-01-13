@@ -181,7 +181,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             processed = self.schema_handler.process_input(user_input, errors, existing=entity)
             if processed and not errors:
                 self._entities[self._edit_index] = processed
-                await self.()
+                await self._save_entities()
                 return await self.async_step_init()
 
         defaults = self.schema_handler.get_defaults(entity)
@@ -206,7 +206,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     if str(i) not in delete
                 ]
         
-            await self.()
+            await self._save_entities()
             return await self.async_step_init()
 
         options = [
@@ -295,7 +295,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"base": "template_empty_or_duplicate"},
                 )
             
-            await self.()
+            await self._save_entities()
             return self.async_create_entry(title="", data={})
         
         # Get templates for dropdown
@@ -385,7 +385,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    async def (self):
+    async def _save_entities(self):
         options = dict(self._config_entry.options)
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
