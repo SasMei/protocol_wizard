@@ -389,18 +389,13 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         options = dict(self._config_entry.options)
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
-        # it says Async.. but is actually not?
-        # Check if update actually changed anything
-        changed = self.hass.config_entries.async_update_entry(
+        # it says Async.. but is actually not? It returns a bool stating nothing changed but it has...
+        self.hass.config_entries.async_update_entry(
             self._config_entry, 
             options=options
         )
-        if changed:
-            _LOGGER.info("Options changed, reloading integration")
-            await asyncio.sleep(1)
-            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
-        else:
-          _LOGGER.debug("Options unchanged, skipping reload")
+        await asyncio.sleep(1) # just make sure everything is working ok
+        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
 
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
