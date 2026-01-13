@@ -46,7 +46,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         """
         Fetch latest data from configured MQTT entities.
         
-        ✅ Event-Driven: Just reads from cache, no waiting!
+        Event-Driven: Just reads from cache, no waiting!
         Messages arrive continuously in background via _on_message callback.
         """
         if not await self._async_connect():
@@ -293,8 +293,8 @@ class MQTTCoordinator(BaseProtocolCoordinator):
     ) -> Any:
         """
         Read a single MQTT topic (for services/card).
-        ✅ Uses client.read() which handles cache + subscribe automatically.
-        ✅ Supports wildcards - returns formatted dict of topics
+        Uses client.read() which handles cache + subscribe automatically.
+        Supports wildcards - returns formatted dict of topics
         
         Args:
             address: MQTT topic (can include wildcards: + or #)
@@ -306,9 +306,9 @@ class MQTTCoordinator(BaseProtocolCoordinator):
         
         try:
             wait_time = kwargs.get("wait_time", 5.0)
-            _LOGGER.debug("[MQTT] Reading topic %s (wait_time=%.1f)", address, wait_time)
+    #        _LOGGER.debug("[MQTT] Reading topic %s (wait_time=%.1f)", address, wait_time)
             
-            # ✅ Client handles everything: cache lookup, subscribe, wait
+            #Client handles everything: cache lookup, subscribe, wait
             payload = await self.client.read(address, wait_time=wait_time)
             
             if payload is None:
@@ -327,7 +327,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                     lines.append(f"{topic} = {value_str}")
                 
                 result = "\n".join(lines)
-                _LOGGER.info("[MQTT] Wildcard %s matched %d topics", address, len(payload))
+       #         _LOGGER.info("[MQTT] Wildcard %s matched %d topics", address, len(payload))
                 return result
             
             # Single topic - decode normally
@@ -374,8 +374,7 @@ class MQTTCoordinator(BaseProtocolCoordinator):
                 # Convert to string
                 value = str(value)
             
-            _LOGGER.debug("[MQTT] Publishing to %s: %s (qos=%d, retain=%s)", 
-                         address, value, qos, retain)
+     #       _LOGGER.debug("[MQTT] Publishing to %s: %s (qos=%d, retain=%s)", address, value, qos, retain)
             
             return await self.client.write(
                 address,
