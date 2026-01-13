@@ -4,7 +4,6 @@
 """The Protocol Wizard integration."""
 import shutil
 import logging
-import json
 import os
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -20,6 +19,7 @@ from .protocols import ProtocolRegistry
 from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
 from .protocols.mqtt import MQTTClient
+from .template_utils import ensure_user_template_dirs, load_template
 
 from .const import (
     CONF_BAUDRATE,
@@ -117,7 +117,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN].setdefault("coordinators", {})
 
     config = entry.data
-    
+    ensure_user_template_dirs(hass)
     # Determine protocol
     protocol_name = config.get(CONF_PROTOCOL)
     if protocol_name is None:
@@ -207,17 +207,10 @@ async def _load_template_into_options(
     template_name: str,
 ) -> None:
     """Load template entities into entry options."""
-    protocol_subdir = "modbus" if protocol == CONF_PROTOCOL_MODBUS else "snmp"
-    template_path = hass.config.path(
-        "custom_components", DOMAIN, "templates", protocol_subdir, f"{template_name}.json"
-    )
-    
+   
     try:
-        def load_file():
-            with open(template_path, "r", encoding="utf-8") as f:
-                return json.load(f)
         
-        template_data = await hass.async_add_executor_job(load_file)
+        template_data = await load_template(hass, protocol, template_name)
         
         if not template_data:
             _LOGGER.warning("Template %s is empty", template_name)
@@ -233,10 +226,6 @@ async def _load_template_into_options(
         hass.config_entries.async_update_entry(entry, options=new_options)
         _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
-    except FileNotFoundError:
-        _LOGGER.error("Template file not found: %s", template_path)
-    except json.JSONDecodeError as err:
-        _LOGGER.error("Failed to parse template %s: %s", template_name, err)
     except Exception as err:
         _LOGGER.error("Failed to load template %s: %s", template_name, err)
 

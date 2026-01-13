@@ -23,6 +23,7 @@ All run-time!
 
 ## Features
 
+- Supports already fully **MQTT, Modbus, SNMP**
 - **Zero YAML configuration** — everything done via the Home Assistant UI
 - Device templates support! Just present your device as a json template! (see below)
 - Full support for Modbus **serial (RS485/USB)** and **IP-based (TCP & UDP)**
@@ -36,8 +37,9 @@ All run-time!
 - Advanced options: scaling, offset, byte/word order, endianness, bit handling, and more
 
 <p align="center">
-  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-modbus.png" width="350" alt="Modbus Wizard Card"/>
-  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-snmp.png" width="350" alt="Modbus Wizard Card"/>
+  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-modbus.png" width="330" alt="Modbus Wizard Card"/>
+  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-snmp.png" width="350" alt="SNMP Wizard Card"/>
+    <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-mqtt.png" width="310" alt="MQTT Wizard Card"/>
   <br><em>Probe and control any register in real-time with the included card</em>
 </p>
 

@@ -60,7 +60,8 @@
       "unknown": "Unexpected error occurred."
     },
     "abort": {
-      "no_templates": "No device templates found in the templates folder."
+      "template_exported": "Template exported successfully",
+      "template_deleted": "Template deleted successfully",
     }
   },
   "options": {

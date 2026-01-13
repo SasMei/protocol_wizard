@@ -6,13 +6,18 @@ from __future__ import annotations
 
 import logging
 import json
-import os
 from datetime import timedelta
 import voluptuous as vol
-
+from .template_utils import ( 
+    save_template, 
+    get_available_templates, 
+    get_template_dropdown_choices, 
+    load_template,
+    delete_template,
+)
 from homeassistant import config_entries
 from homeassistant.helpers import selector
-
+#import asyncio
 from .const import (
     DOMAIN,
     CONF_UPDATE_INTERVAL,
@@ -24,6 +29,7 @@ from .const import (
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
+    CONF_PROTOCOL_MQTT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,6 +81,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             "add_entity": "Add entity",
             "load_template": "Load template",
             "export_template": "Export template",
+            "delete_template": "Delete user template",
         }
         if self._entities:
             menu_options["list_entities"] = f"Entities ({len(self._entities)})"
@@ -227,77 +234,82 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     # ------------------------------------------------------------------
     # TEMPLATE
     # ------------------------------------------------------------------
-
-    async def async_step_load_template(self, user_input=None):
-        """Load a device template — protocol-specific folder."""
+    async def async_step_delete_template(self, user_input=None):
+        """Delete a user template."""
         if user_input:
-            filename = user_input["template"]
-            # Protocol-specific template directory
-            protocol_subdir = self.protocol # works but needs to be more elaborate like in config_flow
-            template_dir = self.hass.config.path(
-                "custom_components", DOMAIN, "templates", protocol_subdir
+            template_id = user_input["template"]
+            
+            success, message = await delete_template(
+                self.hass,
+                self.protocol,
+                template_id
             )
-            path = os.path.join(template_dir, f"{filename}.json")
-
-            try:
-                data = await self.hass.async_add_executor_job(self._load_template, path)
-                added = self.schema_handler.merge_template(self._entities, data)
-                if not added:
-                    return self.async_show_form(
-                        step_id="load_template",
-                        data_schema=self._get_template_schema(),
-                        errors={"base": "template_empty_or_duplicate"},
-                    )
-                self._save_entities()
-                return await self.async_step_init()
-            except FileNotFoundError:
-                _LOGGER.error("Template file not found: %s", path)
+            
+            if not success:
+                return self.async_show_form(
+                    step_id="delete_template",
+                    data_schema=self._get_delete_template_schema(),
+                    errors={"base": "delete_failed"},
+                    description_placeholders={"error": message}
+                )
+            
+            return self.async_abort(reason="template_deleted")
+        
+        # Get only user templates
+        all_templates = await get_available_templates(self.hass, self.protocol)
+        user_templates = {
+            tid: info for tid, info in all_templates.items()
+            if tid.startswith("user:")
+        }
+        dropdown_choices = get_template_dropdown_choices(user_templates)
+        
+        if not dropdown_choices:
+            return self.async_abort(reason="no_user_templates")
+        
+        return self.async_show_form(
+            step_id="delete_template",
+            data_schema=vol.Schema({
+                vol.Required("template"): vol.In(dropdown_choices)
+            })
+        )
+    async def async_step_load_template(self, user_input=None):
+        """Load a device template."""
+        if user_input:
+            template_id = user_input["template"]
+            
+            entities = await load_template(self.hass, self.protocol, template_id)
+            
+            if not entities:
                 return self.async_show_form(
                     step_id="load_template",
                     data_schema=self._get_template_schema(),
                     errors={"base": "template_not_found"},
                 )
-            except Exception as err:
-                _LOGGER.error("Template load failed: %s", err)
+            
+            added = self.schema_handler.merge_template(self._entities, entities)
+            
+            if added == 0:
                 return self.async_show_form(
                     step_id="load_template",
                     data_schema=self._get_template_schema(),
-                    errors={"base": "load_failed"},
+                    errors={"base": "template_empty_or_duplicate"},
                 )
-
-        # List templates from protocol-specific folder
-        protocol_subdir = self.protocol # needs to be more elaborate like in config flow
-        template_dir = self.hass.config.path(
-            "custom_components", DOMAIN, "templates", protocol_subdir
-        )
-
-        try:
-            files = await self.hass.async_add_executor_job(
-                lambda: [
-                    f[:-5]  # strip .json
-                    for f in os.listdir(template_dir)
-                    if f.endswith(".json")
-                ] if os.path.exists(template_dir) else []
-            )
-            templates = sorted(files)
-        except Exception as err:
-            _LOGGER.debug("Failed to list templates in %s: %s", template_dir, err)
-            templates = []
-
-        if not templates:
+            
+            self._save_entities()
+            return await self.async_step_init() # must go back to options flow to avoid race condition reloading entities
+        
+        # Get templates for dropdown
+        templates = await get_available_templates(self.hass, self.protocol)
+        dropdown_choices = get_template_dropdown_choices(templates)
+        
+        if not dropdown_choices:
             return self.async_abort(reason="no_templates")
-
+        
         return self.async_show_form(
             step_id="load_template",
             data_schema=vol.Schema({
-                vol.Required("template"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[selector.SelectOptionDict(value=t, label=t) for t in templates],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                )
-            }),
-            description_placeholders={"templates": ", ".join(templates)},
+                vol.Required("template"): vol.In(dropdown_choices)
+            })
         )
     # ------------------------------------------------------------------
     # Export template
@@ -305,41 +317,53 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     async def async_step_export_template(self, user_input=None):
         if user_input:
             name = user_input["name"].strip()
-    
+            to_user_dir = user_input.get("save_to_user_dir", True)
+            
             if not name:
                 return self.async_show_form(
                     step_id="export_template",
                     data_schema=self._export_schema(),
                     errors={"name": "required"},
                 )
-    
-            protocol_subdir = self.protocol # is for now true
-            template_dir = self.hass.config.path(
-                "custom_components", DOMAIN, "templates", protocol_subdir
+            
+            # Optional: Get device metadata for richer templates
+            metadata = {
+                "name": name,
+                "description": f"Exported from {self.config_entry.title}",
+                "protocol": self.protocol,
+            }
+            
+            success, message = await save_template(
+                self.hass,
+                self.protocol,
+                name,
+                self._entities,
+                metadata=metadata,
+                to_user_dir=to_user_dir
             )
-    
-            os.makedirs(template_dir, exist_ok=True)
-    
-            path = os.path.join(template_dir, f"{name}.json")
-    
-            try:
-                await self.hass.async_add_executor_job(
-                    self._write_template, path, self._entities
-                )
-                return self.async_abort(reason="template_exported")
-    
-            except Exception as err:
-                _LOGGER.error("Template export failed: %s", err)
+            
+            if not success:
                 return self.async_show_form(
                     step_id="export_template",
                     data_schema=self._export_schema(),
                     errors={"base": "export_failed"},
+                    description_placeholders={"error": message}
                 )
-    
+            
+            #Success - close the dialog!
+            return self.async_abort(reason="template_exported")
+        
         return self.async_show_form(
             step_id="export_template",
-            data_schema=self._export_schema(),
+            data_schema=self._export_schema()
         )
+        
+    def _export_schema(self):
+        """Get export template schema."""
+        return vol.Schema({
+            vol.Required("name"): str,
+            vol.Optional("save_to_user_dir", default=True): bool,  # NEW!
+        })
     # ------------------------------------------------------------------
     # INTERNAL
     # ------------------------------------------------------------------
@@ -365,7 +389,12 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         options = dict(self._config_entry.options)
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
+        # it says Async.. but is actually not? It returns a bool stating nothing changed but it has...
+        # anyway we changed this 20 times. It should stay as it is!
+        # Update entry (synchronous)
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
+        
+        # Schedule reload in background (fire and forget)
         self.hass.async_create_task(
             self.hass.config_entries.async_reload(self._config_entry.entry_id)
         )
@@ -373,11 +402,14 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
         options.update(updates)
+        # strangely, this one does not need an await...
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
 
     def _get_schema_handler(self):
         if self.protocol == CONF_PROTOCOL_SNMP:
             return SNMPSchemaHandler()
+        elif self.protocol == CONF_PROTOCOL_MQTT:
+            return MQTTSchemaHandler()
         return ModbusSchemaHandler()
 
 
@@ -567,13 +599,23 @@ class ModbusSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
 
     def merge_template(self, entities, template):
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added
 
 
@@ -698,13 +740,23 @@ class SNMPSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
 
     def merge_template(self, entities, template):
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added
 
 class MQTTSchemaHandler:
@@ -767,16 +819,17 @@ class MQTTSchemaHandler:
     
     def process_input(self, user_input, errors, existing=None):
         """Process and validate user input."""
-        processed = dict(user_input)
+        # Start with existing data (for edits) or empty dict
+        processed = dict(existing) if existing else {}
+        
+        # Update with new values
+        processed.update(user_input)
         
         # Validate topic format
         topic = processed.get("address", "")
         if not topic:
             errors["address"] = "Topic cannot be empty"
             return None
-        
-        # MQTT topics can't have wildcards in entity config (only for subscribe)
-        # But we'll allow them for flexibility
         
         # Validate QoS
         try:
@@ -789,16 +842,21 @@ class MQTTSchemaHandler:
             errors["qos"] = "Invalid QoS value"
             return None
         
+        # Ensure boolean retain
+        processed["retain"] = bool(processed.get("retain", False))
+        
         # Parse options JSON if provided
-        opts_str = processed.get("options", "").strip()
-        if opts_str:
+        opts_str = processed.get("options", "")
+        if isinstance(opts_str, str) and opts_str.strip():
             try:
-                import json
                 opts = json.loads(opts_str)
                 processed["options"] = opts
             except json.JSONDecodeError:
                 errors["options"] = "Invalid JSON format"
                 return None
+        elif isinstance(opts_str, dict):
+            # Already a dict (from template)
+            processed["options"] = opts_str
         else:
             processed.pop("options", None)
         
@@ -806,6 +864,22 @@ class MQTTSchemaHandler:
         for field in ["format", "device_class", "state_class", "entity_category", "icon", "unit"]:
             if not processed.get(field):
                 processed.pop(field, None)
+        
+        # ADD REQUIRED DEFAULTS
+        processed.setdefault("data_type", "string")
+        processed.setdefault("rw", "read")
+        processed.setdefault("qos", 0)
+        processed.setdefault("retain", False)
+        processed.setdefault("scale", 1.0)
+        processed.setdefault("offset", 0.0)
+        
+        # Ensure numeric types
+        try:
+            processed["scale"] = float(processed.get("scale", 1.0))
+            processed["offset"] = float(processed.get("offset", 0.0))
+        except (ValueError, TypeError):
+            errors["scale"] = "Invalid number"
+            return None
         
         return processed
     
@@ -842,12 +916,21 @@ class MQTTSchemaHandler:
         return f"{entity.get('name')} @ {entity.get('address')}"
     
     def merge_template(self, entities, template):
-        """Merge template entities into existing list."""
+        """Merge template entities, processing each to add defaults."""
         added = 0
         existing = {(e.get("name"), e.get("address")) for e in entities}
-        for e in template:
-            key = (e.get("name"), e.get("address"))
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
             if key not in existing:
-                entities.append(e)
-                added += 1
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning("Skipped invalid template entity: %s (errors: %s)", 
+                                  template_entity.get("name"), errors)
+        
         return added

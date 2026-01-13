@@ -1,0 +1,249 @@
+{
+  "title": "Assistant de protocole",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sélectionner le protocole",
+        "description": "Choisissez le protocole pour cet appareil.",
+        "data": {
+          "protocol": "Protocole"
+        }
+      },
+      "modbus_common": {
+        "title": "Configuration du périphérique Modbus",
+        "description": "Paramètres communs pour les périphériques Modbus.",
+        "data": {
+          "name": "Nom du périphérique",
+          "connection_type": "Type de connexion",
+          "slave_id": "ID esclave",
+          "first_reg": "Première adresse de registre (pour test de connexion)",
+          "first_reg_size": "Nombre de registres à lire (pour test de connexion)",
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Configuration Modbus série",
+        "description": "Paramètres du port série.",
+        "data": {
+          "serial_port": "Port série",
+          "baudrate": "Débit en bauds",
+          "parity": "Parité",
+          "stopbits": "Bits d'arrêt",
+          "bytesize": "Bits de données"
+        }
+      },
+      "modbus_ip": {
+        "title": "Configuration Modbus TCP/UDP",
+        "description": "Paramètres réseau.",
+        "data": {
+          "host": "Hôte / Adresse IP",
+          "port": "Port",
+          "transport_type": "Type de transport"
+        }
+      },
+      "snmp_common": {
+        "title": "Configuration du périphérique SNMP",
+        "description": "Paramètres de connexion SNMP.",
+        "data": {
+          "name": "Nom du périphérique",
+          "host": "Hôte / Adresse IP",
+          "port": "Port",
+          "community": "Chaîne de communauté",
+          "version": "Version SNMP",
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au périphérique. Vérifiez les paramètres et l'accès réseau/port.",
+      "invalid_auth": "Informations d'authentification invalides.",
+      "unknown": "Une erreur inattendue s'est produite."
+    },
+    "abort": {
+      "template_exported": "Modèle exporté avec succès",
+      "template_deleted": "Modèle supprimé avec succès"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de l'assistant de protocole",
+        "menu_options": {
+          "settings": "Paramètres",
+          "add_entity": "Ajouter une entité",
+          "load_template": "Charger un modèle",
+          "list_entities": "Voir les entités",
+          "edit_entity": "Modifier l'entité"
+        }
+      },
+      "settings": {
+        "title": "Paramètres de l'appareil",
+        "data": {
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      },
+      "add_entity": {
+        "title": "Ajouter une nouvelle entité",
+        "data": {
+          "name": "Nom de l'entité",
+          "address": "Adresse",
+          "data_type": "Type de données",
+          "rw": "Mode lecture/écriture",
+          "read_mode": "Mode de lecture",
+          "format": "Chaîne de format",
+          "options": "Options"
+        },
+        "data_description": {
+          "name": "Nom unique pour cette entité",
+          "address": "Adresse de registre (Modbus) ou OID (SNMP)",
+          "data_type": "Comment interpréter la valeur brute",
+          "rw": "Lecture seule, écriture seule, ou les deux",
+          "read_mode": "Get : valeur unique ; Walk : sous-arbre complet (SNMP uniquement)",
+          "format": "Chaîne JSON optionnelle pour transformer la valeur",
+          "options": "JSON optionnel pour créer une entité de sélection (spécifiez un dictionnaire entre accolades JSON)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Modifier l'entité",
+        "data": {
+          "name": "Nom de l'entité",
+          "address": "Adresse",
+          "data_type": "Type de données",
+          "rw": "Mode lecture/écriture",
+          "format": "Chaîne de format",
+          "options": "Options"
+        },
+        "data_description": {
+          "name": "Nom unique pour cette entité",
+          "address": "Adresse de registre (Modbus) ou OID (SNMP)",
+          "data_type": "Comment interpréter la valeur brute",
+          "rw": "Lecture seule, écriture seule, ou les deux",
+          "format": "Chaîne JSON optionnelle pour transformer la valeur",
+          "options": "JSON optionnel pour créer une entité de sélection (spécifiez un dictionnaire entre accolades JSON)"
+        }
+      },
+      "load_template": {
+        "title": "Charger un modèle d'appareil",
+        "description": "Sélectionnez un modèle d'appareil à charger. Les modèles disponibles sont affichés dans la liste déroulante ci-dessous.",
+        "data": {
+          "template": "Modèle"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Échec du chargement du modèle.",
+      "template_empty_or_duplicate": "Le modèle ne contient aucune nouvelle entité ou toutes sont des doublons.",
+      "template_not_found": "Fichier modèle non trouvé."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "Hub {protocol}",
+        "state": {
+          "connected": "Connecté",
+          "disconnected": "Déconnecté",
+          "unknown": "Inconnu"
+        }
+      }
+    }
+  },
+  "services": {
+    "read_register": {
+      "name": "Lire un registre",
+      "description": "Lire un registre Modbus et éventuellement le décoder.",
+      "fields": {
+        "address": {
+          "name": "Adresse",
+          "description": "Adresse du registre (base 0)"
+        },
+        "register_type": {
+          "name": "Type de registre",
+          "description": "Utiliser 'auto' pour essayer tous les types (recommandé)"
+        },
+        "data_type": {
+          "name": "Type de données",
+          "description": "Comment interpréter la ou les valeur(s)"
+        },
+        "size": {
+          "name": "Taille",
+          "description": "Nombre de registres/bits à lire"
+        },
+        "byte_order": {
+          "name": "Ordre des octets",
+          "description": "Ordre des octets pour les valeurs multi-octets"
+        },
+        "word_order": {
+          "name": "Ordre des mots",
+          "description": "Ordre des mots pour les valeurs multi-registres"
+        },
+        "raw": {
+          "name": "Mode brut",
+          "description": "Retourner les valeurs brutes des registres au lieu des valeurs décodées"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Écrire un registre",
+      "description": "Écrire une valeur dans un registre Modbus avec l'encodage approprié.",
+      "fields": {
+        "address": {
+          "name": "Adresse du registre",
+          "description": "Adresse du registre Modbus"
+        },
+        "value": {
+          "name": "Valeur",
+          "description": "Valeur à écrire (encodée selon le type de données)"
+        },
+        "register_type": {
+          "name": "Type de registre",
+          "description": "Type de registre dans lequel écrire"
+        },
+        "data_type": {
+          "name": "Type de données",
+          "description": "Comment la valeur doit être encodée"
+        },
+        "byte_order": {
+          "name": "Ordre des octets",
+          "description": "Ordre des octets à l'intérieur d'un registre"
+        },
+        "word_order": {
+          "name": "Ordre des mots",
+          "description": "Ordre des registres pour les valeurs multi-registres"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "Lire un OID SNMP",
+      "description": "Lire un OID SNMP depuis un périphérique SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identifiant d'objet SNMP (ex. : 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Type de données",
+          "description": "Type de données attendu pour la valeur de l'OID"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "Écrire un OID SNMP",
+      "description": "Écrire une valeur dans un OID SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identifiant d'objet SNMP"
+        },
+        "value": {
+          "name": "Valeur",
+          "description": "Valeur à écrire"
+        },
+        "data_type": {
+          "name": "Type de données",
+          "description": "Type de données pour la valeur à écrire"
+        }
+      }
+    }
+  }
+}

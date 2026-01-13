@@ -3,8 +3,6 @@ import logging
 from typing import Any
 import serial.tools.list_ports
 import voluptuous as vol
-import json
-import os
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 from homeassistant.data_entry_flow import FlowResult
@@ -46,6 +44,7 @@ from .const import (
 )
 from .options_flow import ProtocolWizardOptionsFlow
 from .protocols import ProtocolRegistry
+from .template_utils import get_available_templates, get_template_dropdown_choices, load_template
 
 _LOGGER = logging.getLogger(__name__)
 # Reduce noise from pymodbus
@@ -105,102 +104,22 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # MODBUS CONFIG FLOW
     # ================================================================
     
-    async def _get_available_templates(self) -> list[str]:
-        """Get list of available templates for the current protocol (async-safe)."""
-        # Map protocol to subfolder name
-        protocol_to_subdir = {
-            CONF_PROTOCOL_MODBUS: "modbus",
-            CONF_PROTOCOL_SNMP: "snmp",
-            CONF_PROTOCOL_MQTT: "mqtt",
-            # Add future protocols here, e.g.:
-            # "bacnet": "bacnet",
-        }
+    async def _get_available_templates(self) -> dict[str, str]:
+        """Get available templates for dropdown."""
+        templates = await get_available_templates(self.hass, self._protocol)
+        return get_template_dropdown_choices(templates)
     
-        # Get subdir or fallback to empty
-        protocol_subdir = protocol_to_subdir.get(self._protocol, "")
-    
-        if not protocol_subdir:
-            _LOGGER.warning("No template subdir defined for protocol: %s", self._protocol)
-            return []
-    
-        template_dir = self.hass.config.path(
-            "custom_components", DOMAIN, "templates", protocol_subdir
-        )
-    
-        # Async check if directory exists (non-blocking)
-        exists = await self.hass.async_add_executor_job(os.path.exists, template_dir)
-        if not exists:
-            _LOGGER.debug("No templates directory found: %s", template_dir)
-            return []
-    
-        try:
-            # Async list files (non-blocking)
-            files = await self.hass.async_add_executor_job(os.listdir, template_dir)
-    
-            templates = sorted([
-                f[:-5]  # strip .json
-                for f in files
-                if f.endswith(".json") and os.path.isfile(os.path.join(template_dir, f))
-            ])
-    
-            return templates
-    
-        except Exception as err:
-            _LOGGER.debug("Failed to list templates in %s: %s", template_dir, err)
-            return []
-
-    async def _load_template_params(self, template_name: str) -> tuple[int, int]:
-        """Load first register address and size from template (async-safe)."""
-        # Map protocol to subfolder name
-        protocol_to_subdir = {
-            CONF_PROTOCOL_MODBUS: "modbus",
-            CONF_PROTOCOL_SNMP: "snmp",
-            CONF_PROTOCOL_MQTT: "mqtt",
-            # Add future protocols here, e.g.:
-            # "bacnet": "bacnet",
-        }
-        # Get subdir or fallback to empty
-        protocol_subdir = protocol_to_subdir.get(self._protocol, "")
-    
-        if not protocol_subdir:
-            _LOGGER.warning("No template subdir defined for protocol: %s", self._protocol)
-            return []
-            
-        path = self.hass.config.path(
-            "custom_components", DOMAIN, "templates", protocol_subdir, f"{template_name}.json"
-        )
-    
-        # Check existence in executor
-        exists = await self.hass.async_add_executor_job(os.path.exists, path)
-        if not exists:
-            _LOGGER.debug("Template not found: %s", path)
+    async def _load_template_params(self, template_id: str) -> tuple[int, int]:
+        """Load first register address and size from template."""
+        entities = await load_template(self.hass, self._protocol, template_id)
+        
+        if not entities or len(entities) == 0:
             return 0, 1
-    
-        try:
-            # Read file content in executor
-            async def read_file():
-                with open(path, "r", encoding="utf-8") as f:
-                    return f.read()
-    
-            content = await self.hass.async_add_executor_job(read_file)
-    
-            # Parse JSON in executor (json.loads is CPU-bound, safe but better in thread)
-            template = await self.hass.async_add_executor_job(json.loads, content)
-    
-            if not template or not isinstance(template, list) or len(template) == 0:
-                return 0, 1
-    
-            first = template[0]
-            address = int(first.get("address", 0))
-            size = int(first.get("size", 1))
-            return address, size
-    
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Invalid JSON in template %s: %s", template_name, err)
-            return 0, 1
-        except Exception as err:
-            _LOGGER.error("Failed to load template %s: %s", template_name, err)
-            return 0, 1
+        
+        first = entities[0]
+        address = first.get("address", 0)
+        size = first.get("size", 1)
+        return address, size
     
     async def async_step_modbus_common(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Modbus: Common settings with optional template selection."""

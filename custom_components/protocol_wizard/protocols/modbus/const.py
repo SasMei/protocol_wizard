@@ -3,7 +3,7 @@
 #------------------------------------------
 """Modbus-specific constants."""
 
-CONF_ENTITIES = "registers"
+CONF_REGISTERS = "registers"
 
 TYPE_SIZES = {
     "uint16": 1,
