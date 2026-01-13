@@ -59,11 +59,11 @@ class MQTTClient(BaseProtocolClient):
             
             # Resubscribe to all topics on reconnect
             if self._subscribed_topics:
-                _LOGGER.info("Resubscribing to %d topics", len(self._subscribed_topics))
+    #            _LOGGER.info("Resubscribing to %d topics", len(self._subscribed_topics))
                 for topic in self._subscribed_topics:
                     try:
                         self._client.subscribe(topic, qos=0)
-                        _LOGGER.debug("Resubscribed to %s", topic)
+     #                   _LOGGER.debug("Resubscribed to %s", topic)
                     except Exception as err:
                         _LOGGER.error("Failed to resubscribe to %s: %s", topic, err)
         else:
@@ -102,10 +102,10 @@ class MQTTClient(BaseProtocolClient):
             "payload": payload_data,
             "qos": msg.qos,
             "retain": msg.retain,
-            "timestamp": time.time(),  # ✅ Use time.time() not asyncio
+            "timestamp": time.time(),  # Use time.time() not asyncio
         }
         
-        _LOGGER.debug("Cached message for topic %s: %s", topic, payload_data)
+   #     _LOGGER.debug("Cached message for topic %s: %s", topic, payload_data)
 
     async def connect(self) -> bool:
         """Establish connection to MQTT broker and start background loop."""
@@ -134,7 +134,7 @@ class MQTTClient(BaseProtocolClient):
             # Wait for connection
             for _ in range(int(self.timeout * 10)):
                 if self._connected:
-                    _LOGGER.info("MQTT background loop started successfully")
+           #         _LOGGER.info("MQTT background loop started successfully")
                     return True
                 await asyncio.sleep(0.1)
             
@@ -179,7 +179,7 @@ class MQTTClient(BaseProtocolClient):
         
         # Already subscribed?
         if topic in self._subscribed_topics:
-            _LOGGER.debug("Already subscribed to %s", topic)
+      #      _LOGGER.debug("Already subscribed to %s", topic)
             return True
         
         try:
@@ -191,7 +191,7 @@ class MQTTClient(BaseProtocolClient):
             
             if success:
                 self._subscribed_topics.add(topic)
-                _LOGGER.info("Subscribed to %s (persistent)", topic)
+        #        _LOGGER.info("Subscribed to %s (persistent)", topic)
                 return True
             else:
                 _LOGGER.error("Failed to subscribe to %s", topic)
@@ -223,7 +223,7 @@ class MQTTClient(BaseProtocolClient):
             pattern = pattern.replace(r'\#', '.*')     # # = multi-level (anything)
             pattern = f"^{pattern}$"
             
-            _LOGGER.debug("Wildcard pattern: %s → regex: %s", topic, pattern)
+     #       _LOGGER.debug("Wildcard pattern: %s → regex: %s", topic, pattern)
             
             regex = re.compile(pattern)
             
@@ -233,7 +233,7 @@ class MQTTClient(BaseProtocolClient):
                 if regex.match(cached_topic):
                     matches[cached_topic] = cached_data["payload"]
             
-            _LOGGER.debug("Wildcard %s matched %d topics", topic, len(matches))
+    #        _LOGGER.debug("Wildcard %s matched %d topics", topic, len(matches))
             return matches if matches else None
         else:
             # Exact topic match
@@ -263,17 +263,20 @@ class MQTTClient(BaseProtocolClient):
         cached = self.get_cached_message(topic)
         if cached is not None:
             if is_wildcard:
-                _LOGGER.debug("Returning %d cached topics matching %s", len(cached), topic)
+     #           _LOGGER.debug("Returning %d cached topics matching %s", len(cached), topic)
+              pass
             else:
-                _LOGGER.debug("Returning cached value for %s", topic)
+      #          _LOGGER.debug("Returning cached value for %s", topic)
+              pass
             return cached
         
         # Not cached - subscribe and wait for message
         if is_wildcard:
-            _LOGGER.debug("Subscribing to wildcard %s and waiting %.1fs", topic, wait_time)
+#            _LOGGER.debug("Subscribing to wildcard %s and waiting %.1fs", topic, wait_time)
+            pass
         else:
-            _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
-        
+ #           _LOGGER.debug("No cache for %s, subscribing and waiting %.1fs", topic, wait_time)
+            pass
         # Subscribe (will start caching messages)
         success = await self.subscribe_persistent(topic)
         if not success:
@@ -297,17 +300,17 @@ class MQTTClient(BaseProtocolClient):
                     current_count = len(cached)
                     if current_count > last_count:
                         # Still receiving messages
-                        _LOGGER.debug("Wildcard %s: %d topics received", topic, current_count)
+         #               _LOGGER.debug("Wildcard %s: %d topics received", topic, current_count)
                         last_count = current_count
                         stable_checks = 0
                     else:
                         # Count stable - might be done
                         stable_checks += 1
                         if stable_checks >= 3:  # Stable for 600ms
-                            _LOGGER.debug("Wildcard %s: stabilized at %d topics", topic, current_count)
+          #                  _LOGGER.debug("Wildcard %s: stabilized at %d topics", topic, current_count)
                             break
             
-            _LOGGER.info("Wildcard %s: received %d total topics", topic, last_count)
+      #      _LOGGER.info("Wildcard %s: received %d total topics", topic, last_count)
         else:
             await asyncio.sleep(0.5)  # 500ms for single topics
         
@@ -315,25 +318,30 @@ class MQTTClient(BaseProtocolClient):
         cached = self.get_cached_message(topic)
         if cached is not None:
             if is_wildcard:
-                _LOGGER.info("Got %d retained topics matching %s after subscribe", len(cached), topic)
+       #         _LOGGER.info("Got %d retained topics matching %s after subscribe", len(cached), topic)
+                pass
             else:
-                _LOGGER.info("Got retained message for %s immediately after subscribe", topic)
+       #         _LOGGER.info("Got retained message for %s immediately after subscribe", topic)
+                pass
             return cached
         
         # No retained message - wait for live message
         if is_wildcard:
-            _LOGGER.debug("No retained messages for %s, waiting for live messages", topic)
+   #         _LOGGER.debug("No retained messages for %s, waiting for live messages", topic)
+            pass
         else:
-            _LOGGER.debug("No retained message for %s, waiting for live message", topic)
-        
+    #        _LOGGER.debug("No retained message for %s, waiting for live message", topic)
+            pass
         deadline = asyncio.get_event_loop().time() + wait_time
         while asyncio.get_event_loop().time() < deadline:
             cached = self.get_cached_message(topic)
             if cached is not None:
                 if is_wildcard:
-                    _LOGGER.info("Got %d live topics matching %s", len(cached), topic)
+   #                 _LOGGER.info("Got %d live topics matching %s", len(cached), topic)
+                    pass
                 else:
-                    _LOGGER.info("Got live message for %s", topic)
+    #                _LOGGER.info("Got live message for %s", topic)
+                    pass
                 return cached
             await asyncio.sleep(0.1)
         
@@ -387,7 +395,8 @@ class MQTTClient(BaseProtocolClient):
                 return False
             
             if success:
-                _LOGGER.debug("Published to %s: %s (qos=%d, retain=%s)", topic, payload, qos, retain)
+       #         _LOGGER.debug("Published to %s: %s (qos=%d, retain=%s)", topic, payload, qos, retain)
+                pass
             else:
                 _LOGGER.error("Failed to publish to %s", topic)
             
