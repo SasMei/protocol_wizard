@@ -131,7 +131,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             processed = self.schema_handler.process_input(user_input, errors, existing=None)
             if processed and not errors:
                 self._entities.append(processed)
-                await self._save_entities()
+                self._save_entities()
                 return await self.async_step_init()
 
         return self.async_show_form(
@@ -181,7 +181,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             processed = self.schema_handler.process_input(user_input, errors, existing=entity)
             if processed and not errors:
                 self._entities[self._edit_index] = processed
-                await self._save_entities()
+                self._save_entities()
                 return await self.async_step_init()
 
         defaults = self.schema_handler.get_defaults(entity)
@@ -206,7 +206,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     if str(i) not in delete
                 ]
         
-            await self._save_entities()
+            self._save_entities()
             return await self.async_step_init()
 
         options = [
@@ -295,8 +295,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"base": "template_empty_or_duplicate"},
                 )
             
-            await self._save_entities()
-            return self.async_create_entry(title="", data={})
+            self._save_entities()
+            return await self.async_step_init() # must go back to options flow to avoid race condition reloading entities
         
         # Get templates for dropdown
         templates = await get_available_templates(self.hass, self.protocol)
@@ -385,23 +385,19 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    async def _save_entities(self):
+    def _save_entities(self):
         options = dict(self._config_entry.options)
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
         # it says Async.. but is actually not? It returns a bool stating nothing changed but it has...
+        # anyway we changed this 20 times. It should stay as it is!
+        # Update entry (synchronous)
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
         
-        _LOGGER.info("Saved %d entities, scheduling reload", len(self._entities))
-        
-        # Schedule reload after a delay (allows storage to flush)
-        async def delayed_reload():
-            await asyncio.sleep(1.5)  # Wait for storage write
-            _LOGGER.info("Executing delayed reload")
-            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
-        
-        # Fire and forget (don't wait for it)
-        self.hass.async_create_task(delayed_reload())
+        # Schedule reload in background (fire and forget)
+        self.hass.async_create_task(
+            self.hass.config_entries.async_reload(self._config_entry.entry_id)
+        )
 
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
