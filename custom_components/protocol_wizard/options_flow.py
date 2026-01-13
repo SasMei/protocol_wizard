@@ -317,7 +317,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     async def async_step_export_template(self, user_input=None):
         if user_input:
             name = user_input["name"].strip()
-            to_user_dir = user_input.get("save_to_user_dir", True)  # New option!
+            to_user_dir = user_input.get("save_to_user_dir", True)
             
             if not name:
                 return self.async_show_form(
@@ -350,17 +350,14 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     description_placeholders={"error": message}
                 )
             
-            return self.async_show_form(
-                step_id="export_template",
-                data_schema=self._export_schema(),
-                description_placeholders={"message": message}
-            )
+            #Success - close the dialog!
+            return self.async_abort(reason="template_exported")
         
         return self.async_show_form(
             step_id="export_template",
             data_schema=self._export_schema()
         )
-    
+        
     def _export_schema(self):
         """Get export template schema."""
         return vol.Schema({
