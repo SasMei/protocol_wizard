@@ -396,7 +396,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
         options.update(updates)
-        await self.hass.config_entries.async_update_entry(self._config_entry, options=options)
+        # strangely, this one does not need an await...
+        self.hass.config_entries.async_update_entry(self._config_entry, options=options)
 
     def _get_schema_handler(self):
         if self.protocol == CONF_PROTOCOL_SNMP:
