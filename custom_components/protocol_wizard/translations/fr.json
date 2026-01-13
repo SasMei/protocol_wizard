@@ -1,0 +1,87 @@
+{
+  "title": "Assistant de protocole",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sélectionner le protocole",
+        "description": "Choisissez le protocole pour cet appareil.",
+        "data": {
+          "protocol": "Protocole"
+        }
+      },
+      "modbus_common": {
+        "title": "Configuration du périphérique Modbus",
+        "description": "Paramètres communs pour les périphériques Modbus.",
+        "data": {
+          "name": "Nom du périphérique",
+          "connection_type": "Type de connexion",
+          "slave_id": "ID esclave",
+          "first_reg": "Première adresse de registre (pour test de connexion)",
+          "first_reg_size": "Nombre de registres à lire (pour test de connexion)",
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Configuration Modbus série",
+        "description": "Paramètres du port série.",
+        "data": {
+          "serial_port": "Port série",
+          "baudrate": "Débit en bauds",
+          "parity": "Parité",
+          "stopbits": "Bits d'arrêt",
+          "bytesize": "Bits de données"
+        }
+      },
+      "modbus_ip": {
+        "title": "Configuration Modbus TCP/UDP",
+        "description": "Paramètres réseau.",
+        "data": {
+          "host": "Hôte / Adresse IP",
+          "port": "Port",
+          "transport_type": "Type de transport"
+        }
+      },
+      "snmp_common": {
+        "title": "Configuration du périphérique SNMP",
+        "description": "Paramètres de connexion SNMP.",
+        "data": {
+          "name": "Nom du périphérique",
+          "host": "Hôte / Adresse IP",
+          "port": "Port",
+          "community": "Chaîne de communauté",
+          "version": "Version SNMP",
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter au périphérique. Vérifiez les paramètres et l'accès réseau/port.",
+      "invalid_auth": "Informations d'authentification invalides.",
+      "unknown": "Une erreur inattendue s'est produite."
+    },
+    "abort": {
+      "template_exported": "Modèle exporté avec succès",
+      "template_deleted": "Modèle supprimé avec succès"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de l'assistant de protocole",
+        "menu_options": {
+          "settings": "Paramètres",
+          "add_entity": "Ajouter une entité",
+          "load_template": "Charger un modèle",
+          "list_entities": "Voir les entités",
+          "edit_entity": "Modifier l'entité"
+        }
+      },
+      "settings": {
+        "title": "Paramètres de l'appareil",
+        "data": {
+          "update_interval": "Intervalle de mise à jour (secondes)"
+        }
+      }
+    }
+  }
+}
