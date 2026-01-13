@@ -11,7 +11,7 @@
       },
       "modbus_common": {
         "title": "Konfiguracja urządzenia Modbus",
-        "description": "Wspólne ustawienia dla urządzeń Modbus.",
+        "description": "Wspólne ustawienia urządzeń Modbus.",
         "data": {
           "name": "Nazwa urządzenia",
           "connection_type": "Typ połączenia",
@@ -81,7 +81,138 @@
         "data": {
           "update_interval": "Interwał aktualizacji (sekundy)"
         }
+      },
+      "add_entity": {
+        "title": "Dodaj nową encję",
+        "data": {
+          "name": "Nazwa encji",
+          "address": "Adres",
+          "data_type": "Typ danych",
+          "rw": "Tryb odczytu/zapisu",
+          "read_mode": "Tryb odczytu",
+          "format": "Ciąg formatujący",
+          "options": "Opcje"
+        },
+        "data_description": {
+          "name": "Unikalna nazwa dla tej encji",
+          "address": "Adres rejestru (Modbus) lub OID (SNMP)",
+          "data_type": "Jak interpretować surową wartość",
+          "rw": "Tylko odczyt, tylko zapis lub oba",
+          "read_mode": "Get: pojedyncza wartość; Walk: całe poddrzewo (tylko SNMP)",
+          "format": "Opcjonalny ciąg JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (podaj słownik w nawiasach klamrowych JSON)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Edytuj encję",
+        "data": {
+          "name": "Nazwa encji",
+          "address": "Adres",
+          "data_type": "Typ danych",
+          "rw": "Tryb odczytu/zapisu",
+          "format": "Ciąg formatujący",
+          "options": "Opcje"
+        },
+        "data_description": {
+          "name": "Unikalna nazwa dla tej encji",
+          "address": "Adres rejestru (Modbus) lub OID (SNMP)",
+          "data_type": "Jak interpretować surową wartość",
+          "rw": "Tylko odczyt, tylko zapis lub oba",
+          "format": "Opcjonalny ciąg JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (podaj słownik w nawiasach klamrowych JSON)"
+        }
+      },
+      "load_template": {
+        "title": "Wczytaj szablon urządzenia",
+        "description": "Wybierz szablon urządzenia do wczytania. Dostępne szablony wyświetlane są w rozwijanej liście poniżej.",
+        "data": {
+          "template": "Szablon"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Nie udało się wczytać szablonu.",
+      "template_empty_or_duplicate": "Szablon nie zawiera nowych encji lub wszystkie są duplikatami.",
+      "template_not_found": "Nie znaleziono pliku szablonu."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "Hub {protocol}",
+        "state": {
+          "connected": "Połączony",
+          "disconnected": "Rozłączony",
+          "unknown": "Nieznany"
+        }
       }
     }
-  }
-}
+  },
+  "services": {
+    "read_register": {
+      "name": "Odczyt rejestru",
+      "description": "Odczyt rejestru Modbus z opcjonalnym dekodowaniem.",
+      "fields": {
+        "address": {
+          "name": "Adres",
+          "description": "Adres rejestru (liczone od 0)"
+        },
+        "register_type": {
+          "name": "Typ rejestru",
+          "description": "Użyj 'auto', aby wypróbować wszystkie typy (zalecane)"
+        },
+        "data_type": {
+          "name": "Typ danych",
+          "description": "Jak interpretować wartość/wartości"
+        },
+        "size": {
+          "name": "Rozmiar",
+          "description": "Liczba rejestrów/bitów do odczytu"
+        },
+        "byte_order": {
+          "name": "Kolejność bajtów",
+          "description": "Kolejność bajtów dla wartości wielobajtowych"
+        },
+        "word_order": {
+          "name": "Kolejność słów",
+          "description": "Kolejność słów dla wartości wielorejestrowych"
+        },
+        "raw": {
+          "name": "Tryb surowy",
+          "description": "Zwróć surowe wartości rejestrów zamiast zdekodowanych"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Zapis do rejestru",
+      "description": "Zapis wartości do rejestru Modbus z odpowiednim kodowaniem.",
+      "fields": {
+        "address": {
+          "name": "Adres rejestru",
+          "description": "Adres rejestru Modbus"
+        },
+        "value": {
+          "name": "Wartość",
+          "description": "Wartość do zapisania (spakowana zgodnie z typem danych)"
+        },
+        "register_type": {
+          "name": "Typ rejestru",
+          "description": "Typ rejestru do zapisu"
+        },
+        "data_type": {
+          "name": "Typ danych",
+          "description": "Jak wartość powinna być zakodowana"
+        },
+        "byte_order": {
+          "name": "Kolejność bajtów",
+          "description": "Kolejność bajtów wewnątrz rejestru"
+        },
+        "word_order": {
+          "name": "Kolejność słów",
+          "description": "Kolejność rejestrów dla wartości wielorejestrowych"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "Odczyt OID SNMP",
+      "description": "Odczyt OID SNMP z urządzenia SNMP
