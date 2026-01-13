@@ -16,7 +16,7 @@ from pymodbus.client.mixin import ModbusClientMixin
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import ModbusClient
-from .const import CONF_ENTITIES, TYPE_SIZES, reg_key
+from .const import CONF_REGISTERS, TYPE_SIZES, reg_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class ModbusCoordinator(BaseProtocolCoordinator):
             _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
             return {}
 
-        entities = self.my_config_entry.options.get(CONF_ENTITIES, [])
+        entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
         if not entities:
             return {}
 
