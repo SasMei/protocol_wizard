@@ -81,6 +81,168 @@
         "data": {
           "update_interval": "Aktualisierungsintervall (Sekunden)"
         }
+      },
+      "add_entity": {
+        "title": "Neue Entität hinzufügen",
+        "data": {
+          "name": "Entitätsname",
+          "address": "Adresse",
+          "data_type": "Datentyp",
+          "rw": "Lese-/Schreibmodus",
+          "read_mode": "Lesemodus",
+          "format": "Format-String",
+          "options": "Optionen"
+        },
+        "data_description": {
+          "name": "Eindeutiger Name für diese Entität",
+          "address": "Registeradresse (Modbus) oder OID (SNMP)",
+          "data_type": "Wie der Rohwert interpretiert werden soll",
+          "rw": "Nur lesen, nur schreiben oder beides",
+          "read_mode": "Get: Einzelwert; Walk: gesamter Unterbaum (nur SNMP)",
+          "format": "Optionale JSON-Zeichenkette zur Umwandlung des Werts",
+          "options": "Optionales JSON zur Erstellung einer Auswahl-Entität (Dictionary in JSON-Klammern angeben)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Entität bearbeiten",
+        "data": {
+          "name": "Entitätsname",
+          "address": "Adresse",
+          "data_type": "Datentyp",
+          "rw": "Lese-/Schreibmodus",
+          "format": "Format-String",
+          "options": "Optionen"
+        },
+        "data_description": {
+          "name": "Eindeutiger Name für diese Entität",
+          "address": "Registeradresse (Modbus) oder OID (SNMP)",
+          "data_type": "Wie der Rohwert interpretiert werden soll",
+          "rw": "Nur lesen, nur schreiben oder beides",
+          "format": "Optionale JSON-Zeichenkette zur Umwandlung des Werts",
+          "options": "Optionales JSON zur Erstellung einer Auswahl-Entität (Dictionary in JSON-Klammern angeben)"
+        }
+      },
+      "load_template": {
+        "title": "Gerätevorlage laden",
+        "description": "Wählen Sie eine Gerätevorlage zum Laden. Verfügbare Vorlagen werden im Dropdown angezeigt.",
+        "data": {
+          "template": "Vorlage"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Vorlage konnte nicht geladen werden.",
+      "template_empty_or_duplicate": "Vorlage enthält keine neuen Entitäten oder alle sind Duplikate.",
+      "template_not_found": "Vorlagendatei nicht gefunden."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "{protocol} Hub",
+        "state": {
+          "connected": "Verbunden",
+          "disconnected": "Getrennt",
+          "unknown": "Unbekannt"
+        }
+      }
+    }
+  },
+  "services": {
+    "read_register": {
+      "name": "Register lesen",
+      "description": "Einen Modbus-Register lesen und optional dekodieren.",
+      "fields": {
+        "address": {
+          "name": "Adresse",
+          "description": "Registeradresse (0-basiert)"
+        },
+        "register_type": {
+          "name": "Registertyp",
+          "description": "'auto' verwenden um alle Typen zu versuchen (empfohlen)"
+        },
+        "data_type": {
+          "name": "Datentyp",
+          "description": "Wie der Wert/die Werte interpretiert werden sollen"
+        },
+        "size": {
+          "name": "Größe",
+          "description": "Anzahl der zu lesenden Register/Bits"
+        },
+        "byte_order": {
+          "name": "Byte-Reihenfolge",
+          "description": "Byte-Reihenfolge für Mehr-Byte-Werte"
+        },
+        "word_order": {
+          "name": "Word-Reihenfolge",
+          "description": "Word-Reihenfolge für Mehr-Register-Werte"
+        },
+        "raw": {
+          "name": "Rohmodus",
+          "description": "Rohe Registerwerte statt dekodierter Werte zurückgeben"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Register schreiben",
+      "description": "Einen Wert in ein Modbus-Register schreiben (mit korrekter Kodierung).",
+      "fields": {
+        "address": {
+          "name": "Registeradresse",
+          "description": "Modbus-Registeradresse"
+        },
+        "value": {
+          "name": "Wert",
+          "description": "Zu schreibender Wert (passend zum Datentyp gepackt)"
+        },
+        "register_type": {
+          "name": "Registertyp",
+          "description": "Typ des Registers, in das geschrieben werden soll"
+        },
+        "data_type": {
+          "name": "Datentyp",
+          "description": "Wie der Wert kodiert werden soll"
+        },
+        "byte_order": {
+          "name": "Byte-Reihenfolge",
+          "description": "Byte-Reihenfolge innerhalb eines Registers"
+        },
+        "word_order": {
+          "name": "Word-Reihenfolge",
+          "description": "Register-Reihenfolge bei Mehr-Register-Werten"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "SNMP OID lesen",
+      "description": "Einen SNMP OID von einem SNMP-Gerät lesen.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier (z.B. 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Datentyp",
+          "description": "Erwarteter Datentyp des OID-Werts"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "SNMP OID schreiben",
+      "description": "Einen Wert in einen SNMP OID schreiben.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier"
+        },
+        "value": {
+          "name": "Wert",
+          "description": "Zu schreibender Wert"
+        },
+        "data_type": {
+          "name": "Datentyp",
+          "description": "Datentyp für den zu schreibenden Wert"
+        }
       }
     }
   }
