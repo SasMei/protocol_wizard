@@ -107,7 +107,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             if coordinator:
                 coordinator.update_interval = timedelta(seconds=interval)
 
-            self._save_options({CONF_UPDATE_INTERVAL: interval})
+            await self._save_options({CONF_UPDATE_INTERVAL: interval})
             return self.async_abort(reason="settings_updated")
 
         current = self._config_entry.options.get(CONF_UPDATE_INTERVAL, 10)
@@ -393,11 +393,11 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         
         await self.hass.config_entries.async_reload(self._config_entry.entry_id)
 
-    def _save_options(self, updates: dict):
+    async def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
         options.update(updates)
         # strangely, this one does not need an await...
-        self.hass.config_entries.async_update_entry(self._config_entry, options=options)
+        await self.hass.config_entries.async_update_entry(self._config_entry, options=options)
 
     def _get_schema_handler(self):
         if self.protocol == CONF_PROTOCOL_SNMP:
