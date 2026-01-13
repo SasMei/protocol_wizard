@@ -1,0 +1,87 @@
+{
+  "title": "Kreator protokołu",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Wybierz protokół",
+        "description": "Wybierz protokół dla tego urządzenia.",
+        "data": {
+          "protocol": "Protokół"
+        }
+      },
+      "modbus_common": {
+        "title": "Konfiguracja urządzenia Modbus",
+        "description": "Wspólne ustawienia dla urządzeń Modbus.",
+        "data": {
+          "name": "Nazwa urządzenia",
+          "connection_type": "Typ połączenia",
+          "slave_id": "ID slave",
+          "first_reg": "Pierwszy adres rejestru (do testu połączenia)",
+          "first_reg_size": "Liczba rejestrów do odczytu (do testu połączenia)",
+          "update_interval": "Interwał aktualizacji (sekundy)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Konfiguracja Modbus szeregowy",
+        "description": "Ustawienia portu szeregowego.",
+        "data": {
+          "serial_port": "Port szeregowy",
+          "baudrate": "Szybkość transmisji (Baud)",
+          "parity": "Parzystość",
+          "stopbits": "Bity stopu",
+          "bytesize": "Bity danych"
+        }
+      },
+      "modbus_ip": {
+        "title": "Konfiguracja Modbus TCP/UDP",
+        "description": "Ustawienia sieciowe.",
+        "data": {
+          "host": "Host / Adres IP",
+          "port": "Port",
+          "transport_type": "Typ transportu"
+        }
+      },
+      "snmp_common": {
+        "title": "Konfiguracja urządzenia SNMP",
+        "description": "Ustawienia połączenia SNMP.",
+        "data": {
+          "name": "Nazwa urządzenia",
+          "host": "Host / Adres IP",
+          "port": "Port",
+          "community": "Ciąg społeczności",
+          "version": "Wersja SNMP",
+          "update_interval": "Interwał aktualizacji (sekundy)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nie można połączyć się z urządzeniem. Sprawdź ustawienia oraz dostęp do sieci/portu.",
+      "invalid_auth": "Nieprawidłowe dane uwierzytelniające.",
+      "unknown": "Wystąpił nieoczekiwany błąd."
+    },
+    "abort": {
+      "template_exported": "Szablon pomyślnie wyeksportowany",
+      "template_deleted": "Szablon pomyślnie usunięty"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcje kreatora protokołu",
+        "menu_options": {
+          "settings": "Ustawienia",
+          "add_entity": "Dodaj encję",
+          "load_template": "Wczytaj szablon",
+          "list_entities": "Lista encji",
+          "edit_entity": "Edytuj encję"
+        }
+      },
+      "settings": {
+        "title": "Ustawienia urządzenia",
+        "data": {
+          "update_interval": "Interwał aktualizacji (sekundy)"
+        }
+      }
+    }
+  }
+}
