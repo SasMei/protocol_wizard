@@ -17,7 +17,7 @@ from .template_utils import (
 )
 from homeassistant import config_entries
 from homeassistant.helpers import selector
-
+import asyncio
 from .const import (
     DOMAIN,
     CONF_UPDATE_INTERVAL,
@@ -29,6 +29,7 @@ from .const import (
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
+    CONF_PROTOCOL_MQTT,
 )
 
 _LOGGER = logging.getLogger(__name__)
