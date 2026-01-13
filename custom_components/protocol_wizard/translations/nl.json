@@ -1,0 +1,249 @@
+{
+  "title": "Protocol Wizard",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Selecteer protocol",
+        "description": "Kies het protocol voor dit apparaat.",
+        "data": {
+          "protocol": "Protocol"
+        }
+      },
+      "modbus_common": {
+        "title": "Modbus apparaatconfiguratie",
+        "description": "Algemene instellingen voor Modbus-apparaten.",
+        "data": {
+          "name": "Apparaatnaam",
+          "connection_type": "Verbindingstype",
+          "slave_id": "Slave ID",
+          "first_reg": "Eerste registeradres (voor connectietest)",
+          "first_reg_size": "Aantal te lezen registers (voor connectietest)",
+          "update_interval": "Update-interval (seconden)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Modbus seriele configuratie",
+        "description": "Instellingen voor seriële poort.",
+        "data": {
+          "serial_port": "Seriële poort",
+          "baudrate": "Baudrate",
+          "parity": "Pariteit",
+          "stopbits": "Stopbits",
+          "bytesize": "Databits"
+        }
+      },
+      "modbus_ip": {
+        "title": "Modbus TCP/UDP configuratie",
+        "description": "Netwerkinstellingen.",
+        "data": {
+          "host": "Host / IP-adres",
+          "port": "Poort",
+          "transport_type": "Transporttype"
+        }
+      },
+      "snmp_common": {
+        "title": "SNMP apparaatconfiguratie",
+        "description": "SNMP verbindingsinstellingen.",
+        "data": {
+          "name": "Apparaatnaam",
+          "host": "Host / IP-adres",
+          "port": "Poort",
+          "community": "Community string",
+          "version": "SNMP versie",
+          "update_interval": "Update-interval (seconden)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Kan geen verbinding maken met het apparaat. Controleer de instellingen en netwerk-/poorttoegang.",
+      "invalid_auth": "Ongeldige authenticatiegegevens.",
+      "unknown": "Er is een onverwachte fout opgetreden."
+    },
+    "abort": {
+      "template_exported": "Template succesvol geëxporteerd",
+      "template_deleted": "Template succesvol verwijderd"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protocol Wizard opties",
+        "menu_options": {
+          "settings": "Instellingen",
+          "add_entity": "Entiteit toevoegen",
+          "load_template": "Template laden",
+          "list_entities": "Entiteiten bekijken",
+          "edit_entity": "Entiteit bewerken"
+        }
+      },
+      "settings": {
+        "title": "Apparaatinstellingen",
+        "data": {
+          "update_interval": "Update-interval (seconden)"
+        }
+      },
+      "add_entity": {
+        "title": "Nieuwe entiteit toevoegen",
+        "data": {
+          "name": "Entiteitnaam",
+          "address": "Adres",
+          "data_type": "Gegevenstype",
+          "rw": "Lezen/schrijven modus",
+          "read_mode": "Leesmodus",
+          "format": "Formaatstring",
+          "options": "Opties"
+        },
+        "data_description": {
+          "name": "Unieke naam voor deze entiteit",
+          "address": "Registeradres (Modbus) of OID (SNMP)",
+          "data_type": "Hoe de ruwe waarde geïnterpreteerd moet worden",
+          "rw": "Alleen lezen, alleen schrijven, of beide",
+          "read_mode": "Get: enkele waarde; Walk: volledige subtree (alleen SNMP)",
+          "format": "Optionele JSON-string om de waarde te transformeren",
+          "options": "Optionele JSON om een select-entiteit te maken (specificeer dictionary in JSON-accolades)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Entiteit bewerken",
+        "data": {
+          "name": "Entiteitnaam",
+          "address": "Adres",
+          "data_type": "Gegevenstype",
+          "rw": "Lezen/schrijven modus",
+          "format": "Formaatstring",
+          "options": "Opties"
+        },
+        "data_description": {
+          "name": "Unieke naam voor deze entiteit",
+          "address": "Registeradres (Modbus) of OID (SNMP)",
+          "data_type": "Hoe de ruwe waarde geïnterpreteerd moet worden",
+          "rw": "Alleen lezen, alleen schrijven, of beide",
+          "format": "Optionele JSON-string om de waarde te transformeren",
+          "options": "Optionele JSON om een select-entiteit te maken (specificeer dictionary in JSON-accolades)"
+        }
+      },
+      "load_template": {
+        "title": "Apparaat-template laden",
+        "description": "Selecteer een apparaat-template om te laden. Beschikbare templates worden getoond in het dropdownmenu hieronder.",
+        "data": {
+          "template": "Template"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Template laden mislukt.",
+      "template_empty_or_duplicate": "Template bevat geen nieuwe entiteiten of alle zijn duplicaten.",
+      "template_not_found": "Templatebestand niet gevonden."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "{protocol} Hub",
+        "state": {
+          "connected": "Verbonden",
+          "disconnected": "Verbroken",
+          "unknown": "Onbekend"
+        }
+      }
+    }
+  },
+  "services": {
+    "read_register": {
+      "name": "Register lezen",
+      "description": "Lees een Modbus-register en decodeer deze optioneel.",
+      "fields": {
+        "address": {
+          "name": "Adres",
+          "description": "Registeradres (0-gebaseerd)"
+        },
+        "register_type": {
+          "name": "Registertype",
+          "description": "Gebruik 'auto' om alle typen te proberen (aanbevolen)"
+        },
+        "data_type": {
+          "name": "Gegevenstype",
+          "description": "Hoe de waarde(s) geïnterpreteerd moeten worden"
+        },
+        "size": {
+          "name": "Grootte",
+          "description": "Aantal te lezen registers/bits"
+        },
+        "byte_order": {
+          "name": "Byte-volgorde",
+          "description": "Byte-volgorde voor multi-byte waarden"
+        },
+        "word_order": {
+          "name": "Word-volgorde",
+          "description": "Word-volgorde voor multi-register waarden"
+        },
+        "raw": {
+          "name": "Raw modus",
+          "description": "Geef ruwe registerwaarden terug in plaats van gedecodeerde waarden"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Register schrijven",
+      "description": "Schrijf een waarde naar een Modbus-register met de juiste codering.",
+      "fields": {
+        "address": {
+          "name": "Registeradres",
+          "description": "Modbus registeradres"
+        },
+        "value": {
+          "name": "Waarde",
+          "description": "Te schrijven waarde (verpakt volgens gegevenstype)"
+        },
+        "register_type": {
+          "name": "Registertype",
+          "description": "Type register waarnaar geschreven wordt"
+        },
+        "data_type": {
+          "name": "Gegevenstype",
+          "description": "Hoe de waarde gecodeerd moet worden"
+        },
+        "byte_order": {
+          "name": "Byte-volgorde",
+          "description": "Byte-volgorde binnen een register"
+        },
+        "word_order": {
+          "name": "Word-volgorde",
+          "description": "Register-volgorde voor multi-register waarden"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "SNMP OID lezen",
+      "description": "Lees een SNMP OID van een SNMP-apparaat.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier (bijv. 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Gegevenstype",
+          "description": "Verwacht gegevenstype van de OID-waarde"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "SNMP OID schrijven",
+      "description": "Schrijf een waarde naar een SNMP OID.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier"
+        },
+        "value": {
+          "name": "Waarde",
+          "description": "Te schrijven waarde"
+        },
+        "data_type": {
+          "name": "Gegevenstype",
+          "description": "Gegevenstype voor de waarde"
+        }
+      }
+    }
+  }
+}
