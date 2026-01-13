@@ -37,8 +37,9 @@ All run-time!
 - Advanced options: scaling, offset, byte/word order, endianness, bit handling, and more
 
 <p align="center">
-  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-modbus.png" width="350" alt="Modbus Wizard Card"/>
-  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-snmp.png" width="350" alt="Modbus Wizard Card"/>
+  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-modbus.png" width="330" alt="Modbus Wizard Card"/>
+  <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-snmp.png" width="350" alt="SNMP Wizard Card"/>
+    <img src="https://github.com/partach/protocol_wizard/raw/main/pictures/pwz-card-mqtt.png" width="310" alt="MQTT Wizard Card"/>
   <br><em>Probe and control any register in real-time with the included card</em>
 </p>
 
