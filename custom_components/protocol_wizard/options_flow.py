@@ -17,7 +17,7 @@ from .template_utils import (
 )
 from homeassistant import config_entries
 from homeassistant.helpers import selector
-import asyncio
+#import asyncio
 from .const import (
     DOMAIN,
     CONF_UPDATE_INTERVAL,
