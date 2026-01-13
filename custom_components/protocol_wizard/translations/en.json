@@ -61,7 +61,7 @@
     },
     "abort": {
       "template_exported": "Template exported successfully",
-      "template_deleted": "Template deleted successfully",
+      "template_deleted": "Template deleted successfully"
     }
   },
   "options": {
