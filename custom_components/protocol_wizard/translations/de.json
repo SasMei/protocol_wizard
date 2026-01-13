@@ -1,0 +1,87 @@
+{
+  "title": "Protokoll-Assistent",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Protokoll auswählen",
+        "description": "Wählen Sie das Protokoll für dieses Gerät.",
+        "data": {
+          "protocol": "Protokoll"
+        }
+      },
+      "modbus_common": {
+        "title": "Modbus-Gerätekonfiguration",
+        "description": "Allgemeine Einstellungen für Modbus-Geräte.",
+        "data": {
+          "name": "Gerätename",
+          "connection_type": "Verbindungstyp",
+          "slave_id": "Slave-ID",
+          "first_reg": "Erste Registeradresse (für Verbindungstest)",
+          "first_reg_size": "Anzahl zu lesender Register (für Verbindungstest)",
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Modbus Seriell Konfiguration",
+        "description": "Einstellungen der seriellen Schnittstelle.",
+        "data": {
+          "serial_port": "Serielle Schnittstelle",
+          "baudrate": "Baudrate",
+          "parity": "Parität",
+          "stopbits": "Stopp-Bits",
+          "bytesize": "Daten-Bits"
+        }
+      },
+      "modbus_ip": {
+        "title": "Modbus TCP/UDP Konfiguration",
+        "description": "Netzwerkeinstellungen.",
+        "data": {
+          "host": "Host / IP-Adresse",
+          "port": "Port",
+          "transport_type": "Transporttyp"
+        }
+      },
+      "snmp_common": {
+        "title": "SNMP-Gerätekonfiguration",
+        "description": "SNMP-Verbindungseinstellungen.",
+        "data": {
+          "name": "Gerätename",
+          "host": "Host / IP-Adresse",
+          "port": "Port",
+          "community": "Community-String",
+          "version": "SNMP-Version",
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Gerät nicht möglich. Bitte Einstellungen sowie Netzwerk-/Port-Zugriff prüfen.",
+      "invalid_auth": "Ungültige Authentifizierungsdaten.",
+      "unknown": "Unerwarteter Fehler aufgetreten."
+    },
+    "abort": {
+      "template_exported": "Vorlage erfolgreich exportiert",
+      "template_deleted": "Vorlage erfolgreich gelöscht"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protokoll-Assistent Optionen",
+        "menu_options": {
+          "settings": "Einstellungen",
+          "add_entity": "Entität hinzufügen",
+          "load_template": "Vorlage laden",
+          "list_entities": "Entitäten anzeigen",
+          "edit_entity": "Entität bearbeiten"
+        }
+      },
+      "settings": {
+        "title": "Geräteeinstellungen",
+        "data": {
+          "update_interval": "Aktualisierungsintervall (Sekunden)"
+        }
+      }
+    }
+  }
+}
