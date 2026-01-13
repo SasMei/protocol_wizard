@@ -11,7 +11,7 @@
       },
       "modbus_common": {
         "title": "Konfiguracja urządzenia Modbus",
-        "description": "Wspólne ustawienia urządzeń Modbus.",
+        "description": "Wspólne ustawienia dla urządzeń Modbus.",
         "data": {
           "name": "Nazwa urządzenia",
           "connection_type": "Typ połączenia",
@@ -26,7 +26,7 @@
         "description": "Ustawienia portu szeregowego.",
         "data": {
           "serial_port": "Port szeregowy",
-          "baudrate": "Szybkość transmisji (Baud)",
+          "baudrate": "Szybkość transmisji (baud)",
           "parity": "Parzystość",
           "stopbits": "Bity stopu",
           "bytesize": "Bity danych"
@@ -48,14 +48,14 @@
           "name": "Nazwa urządzenia",
           "host": "Host / Adres IP",
           "port": "Port",
-          "community": "Ciąg społeczności",
+          "community": "Ciąg społeczności (Community String)",
           "version": "Wersja SNMP",
           "update_interval": "Interwał aktualizacji (sekundy)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Nie można połączyć się z urządzeniem. Sprawdź ustawienia oraz dostęp do sieci/portu.",
+      "cannot_connect": "Nie można połączyć się z urządzeniem. Sprawdź ustawienia oraz dostęp do sieci i portu.",
       "invalid_auth": "Nieprawidłowe dane uwierzytelniające.",
       "unknown": "Wystąpił nieoczekiwany błąd."
     },
@@ -67,7 +67,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Opcje kreatora protokołu",
+        "title": "Opcje Kreatora protokołu",
         "menu_options": {
           "settings": "Ustawienia",
           "add_entity": "Dodaj encję",
@@ -96,11 +96,11 @@
         "data_description": {
           "name": "Unikalna nazwa dla tej encji",
           "address": "Adres rejestru (Modbus) lub OID (SNMP)",
-          "data_type": "Jak interpretować surową wartość",
+          "data_type": "Sposób interpretacji surowej wartości",
           "rw": "Tylko odczyt, tylko zapis lub oba",
           "read_mode": "Get: pojedyncza wartość; Walk: całe poddrzewo (tylko SNMP)",
-          "format": "Opcjonalny ciąg JSON do transformacji wartości",
-          "options": "Opcjonalny JSON tworzący encję wyboru (podaj słownik w nawiasach klamrowych JSON)"
+          "format": "Opcjonalny ciąg w formacie JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (wartość w nawiasach klamrowych JSON)"
         }
       },
       "edit_entity_form": {
@@ -116,15 +116,15 @@
         "data_description": {
           "name": "Unikalna nazwa dla tej encji",
           "address": "Adres rejestru (Modbus) lub OID (SNMP)",
-          "data_type": "Jak interpretować surową wartość",
+          "data_type": "Sposób interpretacji surowej wartości",
           "rw": "Tylko odczyt, tylko zapis lub oba",
-          "format": "Opcjonalny ciąg JSON do transformacji wartości",
-          "options": "Opcjonalny JSON tworzący encję wyboru (podaj słownik w nawiasach klamrowych JSON)"
+          "format": "Opcjonalny ciąg w formacie JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (wartość w nawiasach klamrowych JSON)"
         }
       },
       "load_template": {
         "title": "Wczytaj szablon urządzenia",
-        "description": "Wybierz szablon urządzenia do wczytania. Dostępne szablony wyświetlane są w rozwijanej liście poniżej.",
+        "description": "Wybierz szablon urządzenia do wczytania. Dostępne szablony są wyświetlane w rozwijanej liście poniżej.",
         "data": {
           "template": "Szablon"
         }
@@ -159,15 +159,15 @@
         },
         "register_type": {
           "name": "Typ rejestru",
-          "description": "Użyj 'auto', aby wypróbować wszystkie typy (zalecane)"
+          "description": "Użyj 'auto', aby spróbować wszystkich typów (zalecane)"
         },
         "data_type": {
           "name": "Typ danych",
-          "description": "Jak interpretować wartość/wartości"
+          "description": "Sposób interpretacji wartości"
         },
         "size": {
           "name": "Rozmiar",
-          "description": "Liczba rejestrów/bitów do odczytu"
+          "description": "Liczba rejestrów/bitów do odczytania"
         },
         "byte_order": {
           "name": "Kolejność bajtów",
@@ -197,11 +197,11 @@
         },
         "register_type": {
           "name": "Typ rejestru",
-          "description": "Typ rejestru do zapisu"
+          "description": "Typ rejestru, do którego ma być zapis"
         },
         "data_type": {
           "name": "Typ danych",
-          "description": "Jak wartość powinna być zakodowana"
+          "description": "Sposób kodowania wartości"
         },
         "byte_order": {
           "name": "Kolejność bajtów",
@@ -215,4 +215,35 @@
     },
     "read_snmp": {
       "name": "Odczyt OID SNMP",
-      "description": "Odczyt OID SNMP z urządzenia SNMP
+      "description": "Odczyt OID SNMP z urządzenia SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identyfikator obiektu SNMP (np. 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Typ danych",
+          "description": "Oczekiwany typ danych wartości OID"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "Zapis OID SNMP",
+      "description": "Zapis wartości do OID SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identyfikator obiektu SNMP"
+        },
+        "value": {
+          "name": "Wartość",
+          "description": "Wartość do zapisania"
+        },
+        "data_type": {
+          "name": "Typ danych",
+          "description": "Typ danych dla zapisywanej wartości"
+        }
+      }
+    }
+  }
+}
