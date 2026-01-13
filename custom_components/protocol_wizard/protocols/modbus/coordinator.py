@@ -54,11 +54,31 @@ class ModbusCoordinator(BaseProtocolCoordinator):
     # ----------------------------------------------------------------
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch latest data from configured entities."""
+
+        _LOGGER.warning("="*60)
+        _LOGGER.warning("Modbus coordinator _async_update_data() called")
+
         if not await self._async_connect():
             _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
             return {}
+            
+        _LOGGER.warning("Entry ID: %s", self.my_config_entry.entry_id)
+        _LOGGER.warning("CONF_REGISTERS value: '%s'", CONF_REGISTERS)
+        _LOGGER.warning("Options keys: %s", list(self.my_config_entry.options.keys()))
 
+        
         entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
+
+        _LOGGER.warning("Looking for key: '%s'", CONF_REGISTERS)
+        _LOGGER.warning("Found entities: %d", len(entities))
+
+        if entities:
+            _LOGGER.warning("Sample entity: %s", entities[0])
+        else:
+            _LOGGER.error("NO ENTITIES FOUND!")
+            _LOGGER.error("Full options: %s", self.my_config_entry.options)
+        
+        _LOGGER.warning("="*60)
         if not entities:
             return {}
 
