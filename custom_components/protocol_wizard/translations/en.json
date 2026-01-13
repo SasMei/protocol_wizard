@@ -1,249 +1,249 @@
 {
-  "title": "Protocol Wizard",
-  "config": {
-    "step": {
-      "user": {
-        "title": "Select Protocol",
-        "description": "Choose the protocol for this device.",
-        "data": {
-          "protocol": "Protocol"
-        }
-      },
-      "modbus_common": {
-        "title": "Modbus Device Configuration",
-        "description": "Common settings for Modbus devices.",
-        "data": {
-          "name": "Device Name",
-          "connection_type": "Connection Type",
-          "slave_id": "Slave ID",
-          "first_reg": "First Register Address (for connection test)",
-          "first_reg_size": "Number of Registers to Read (for connection test)",
-          "update_interval": "Update Interval (seconds)"
-        }
-      },
-      "modbus_serial": {
-        "title": "Modbus Serial Configuration",
-        "description": "Serial port settings.",
-        "data": {
-          "serial_port": "Serial Port",
-          "baudrate": "Baud Rate",
-          "parity": "Parity",
-          "stopbits": "Stop Bits",
-          "bytesize": "Data Bits"
-        }
-      },
-      "modbus_ip": {
-        "title": "Modbus TCP/UDP Configuration",
-        "description": "Network settings.",
-        "data": {
-          "host": "Host / IP Address",
-          "port": "Port",
-          "transport_type": "Transport Type"
-        }
-      },
-      "snmp_common": {
-        "title": "SNMP Device Configuration",
-        "description": "SNMP connection settings.",
-        "data": {
-          "name": "Device Name",
-          "host": "Host / IP Address",
-          "port": "Port",
-          "community": "Community String",
-          "version": "SNMP Version",
-          "update_interval": "Update Interval (seconds)"
-        }
-      }
-    },
-    "error": {
-      "cannot_connect": "Unable to connect to the device. Check settings and network/port access.",
-      "invalid_auth": "Invalid authentication credentials.",
-      "unknown": "Unexpected error occurred."
-    },
-    "abort": {
-      "template_exported": "Template exported successfully",
-      "template_deleted": "Template deleted successfully"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Protocol Wizard Options",
-        "menu_options": {
-          "settings": "Settings",
-          "add_entity": "Add Entity",
-          "load_template": "Load Template",
-          "list_entities": "View Entities",
-          "edit_entity": "Edit Entity"
-        }
-      },
-      "settings": {
-        "title": "Device Settings",
-        "data": {
-          "update_interval": "Update Interval (seconds)"
-        }
-      },
-      "add_entity": {
-        "title": "Add New Entity",
-        "data": {
-          "name": "Entity Name",
-          "address": "Address",
-          "data_type": "Data Type",
-          "rw": "Read/Write Mode",
-          "read_mode": "Read Mode",
-          "format": "Format String",
-          "options": "Options"
-        },
-        "data_description": {
-          "name": "Unique name for this entity",
-          "address": "Register address (Modbus) or OID (SNMP)",
-          "data_type": "How to interpret the raw value",
-          "rw": "Read-only, write-only, or both",
-          "read_mode": "Get: single value; Walk: full subtree (SNMP only)",
-          "format": "Optional string in json format to tranform value",
-          "options": "Optional JSON creating select entity (specify dict in json braces)"
-        }
-      },
-      "edit_entity_form": {
-        "title": "Edit Entity",
-        "data": {
-          "name": "Entity Name",
-          "address": "Address",
-          "data_type": "Data Type",
-          "rw": "Read/Write Mode",
-          "format": "Format String",
-          "options": "Options"
-        },
-        "data_description": {
-          "name": "Unique name for this entity",
-          "address": "Register address (Modbus) or OID (SNMP)",
-          "data_type": "How to interpret the raw value",
-          "rw": "Read-only, write-only, or both",
-          "format": "Optional string in json format to tranform value",
-          "options": "Optional JSON creating select entity (specify dict in json braces)"
-        }
-      },
-      "load_template": {
-        "title": "Load Device Template",
-        "description": "Select a device template to load. Available templates are shown in the dropdown below.",
-        "data": {
-          "template": "Template"
-        }
-      }
-    },
-    "error": {
-      "load_failed": "Failed to load template.",
-      "template_empty_or_duplicate": "Template contains no new entities or all are duplicates.",
-      "template_not_found": "Template file not found."
-    }
-  },
-  "entity": {
-    "sensor": {
-      "hub": {
-        "name": "{protocol} Hub",
-        "state": {
-          "connected": "Connected",
-          "disconnected": "Disconnected",
-          "unknown": "Unknown"
-        }
-      }
-    }
-  },
-  "services": {
-    "read_register": {
-      "name": "Read Register",
-      "description": "Read a Modbus register and optionally decode it.",
-      "fields": {
-        "address": {
-          "name": "Address",
-          "description": "Register address (0-based)"
-        },
-        "register_type": {
-          "name": "Register Type",
-          "description": "Use 'auto' to try all types (recommended)"
-        },
-        "data_type": {
-          "name": "Data Type",
-          "description": "How to interpret the value(s)"
-        },
-        "size": {
-          "name": "Size",
-          "description": "Number of registers/bits to read"
-        },
-        "byte_order": {
-          "name": "Byte Order",
-          "description": "Byte order for multi-byte values"
-        },
-        "word_order": {
-          "name": "Word Order",
-          "description": "Word order for multi-register values"
-        },
-        "raw": {
-          "name": "Raw Mode",
-          "description": "Return raw register values instead of decoded"
-        }
-      }
-    },
-    "write_register": {
-      "name": "Write Register",
-      "description": "Write a value to a Modbus register with proper encoding.",
-      "fields": {
-        "address": {
-          "name": "Register Address",
-          "description": "Modbus register address"
-        },
-        "value": {
-          "name": "Value",
-          "description": "Value to write (packed according to data type)"
-        },
-        "register_type": {
-          "name": "Register Type",
-          "description": "Type of register to write to"
-        },
-        "data_type": {
-          "name": "Data Type",
-          "description": "How the value should be encoded"
-        },
-        "byte_order": {
-          "name": "Byte Order",
-          "description": "Byte order inside a register"
-        },
-        "word_order": {
-          "name": "Word Order",
-          "description": "Register order for multi-register values"
-        }
-      }
-    },
-    "read_snmp": {
-      "name": "Read SNMP OID",
-      "description": "Read an SNMP OID from an SNMP device.",
-      "fields": {
-        "oid": {
-          "name": "OID",
-          "description": "SNMP Object Identifier (e.g., 1.3.6.1.2.1.1.1.0)"
-        },
-        "data_type": {
-          "name": "Data Type",
-          "description": "Expected data type of the OID value"
-        }
-      }
-    },
-    "write_snmp": {
-      "name": "Write SNMP OID",
-      "description": "Write a value to an SNMP OID.",
-      "fields": {
-        "oid": {
-          "name": "OID",
-          "description": "SNMP Object Identifier"
-        },
-        "value": {
-          "name": "Value",
-          "description": "Value to write"
-        },
-        "data_type": {
-          "name": "Data Type",
-          "description": "Data type for the value"
-        }
-      }
-    }
-  }
+  "title": "Protocol Wizard",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select Protocol",
+        "description": "Choose the protocol for this device.",
+        "data": {
+          "protocol": "Protocol"
+        }
+      },
+      "modbus_common": {
+        "title": "Modbus Device Configuration",
+        "description": "Common settings for Modbus devices.",
+        "data": {
+          "name": "Device Name",
+          "connection_type": "Connection Type",
+          "slave_id": "Slave ID",
+          "first_reg": "First Register Address (for connection test)",
+          "first_reg_size": "Number of Registers to Read (for connection test)",
+          "update_interval": "Update Interval (seconds)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Modbus Serial Configuration",
+        "description": "Serial port settings.",
+        "data": {
+          "serial_port": "Serial Port",
+          "baudrate": "Baud Rate",
+          "parity": "Parity",
+          "stopbits": "Stop Bits",
+          "bytesize": "Data Bits"
+        }
+      },
+      "modbus_ip": {
+        "title": "Modbus TCP/UDP Configuration",
+        "description": "Network settings.",
+        "data": {
+          "host": "Host / IP Address",
+          "port": "Port",
+          "transport_type": "Transport Type"
+        }
+      },
+      "snmp_common": {
+        "title": "SNMP Device Configuration",
+        "description": "SNMP connection settings.",
+        "data": {
+          "name": "Device Name",
+          "host": "Host / IP Address",
+          "port": "Port",
+          "community": "Community String",
+          "version": "SNMP Version",
+          "update_interval": "Update Interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the device. Check settings and network/port access.",
+      "invalid_auth": "Invalid authentication credentials.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "template_exported": "Template exported successfully",
+      "template_deleted": "Template deleted successfully"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Protocol Wizard Options",
+        "menu_options": {
+          "settings": "Settings",
+          "add_entity": "Add Entity",
+          "load_template": "Load Template",
+          "list_entities": "View Entities",
+          "edit_entity": "Edit Entity"
+        }
+      },
+      "settings": {
+        "title": "Device Settings",
+        "data": {
+          "update_interval": "Update Interval (seconds)"
+        }
+      },
+      "add_entity": {
+        "title": "Add New Entity",
+        "data": {
+          "name": "Entity Name",
+          "address": "Address",
+          "data_type": "Data Type",
+          "rw": "Read/Write Mode",
+          "read_mode": "Read Mode",
+          "format": "Format String",
+          "options": "Options"
+        },
+        "data_description": {
+          "name": "Unique name for this entity",
+          "address": "Register address (Modbus) or OID (SNMP)",
+          "data_type": "How to interpret the raw value",
+          "rw": "Read-only, write-only, or both",
+          "read_mode": "Get: single value; Walk: full subtree (SNMP only)",
+          "format": "Optional string in json format to tranform value",
+          "options": "Optional JSON creating select entity (specify dict in json braces)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Edit Entity",
+        "data": {
+          "name": "Entity Name",
+          "address": "Address",
+          "data_type": "Data Type",
+          "rw": "Read/Write Mode",
+          "format": "Format String",
+          "options": "Options"
+        },
+        "data_description": {
+          "name": "Unique name for this entity",
+          "address": "Register address (Modbus) or OID (SNMP)",
+          "data_type": "How to interpret the raw value",
+          "rw": "Read-only, write-only, or both",
+          "format": "Optional string in json format to tranform value",
+          "options": "Optional JSON creating select entity (specify dict in json braces)"
+        }
+      },
+      "load_template": {
+        "title": "Load Device Template",
+        "description": "Select a device template to load. Available templates are shown in the dropdown below.",
+        "data": {
+          "template": "Template"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Failed to load template.",
+      "template_empty_or_duplicate": "Template contains no new entities or all are duplicates.",
+      "template_not_found": "Template file not found."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "{protocol} Hub",
+        "state": {
+          "connected": "Connected",
+          "disconnected": "Disconnected",
+          "unknown": "Unknown"
+        }
+      }
+    }
+  },
+  "services": {
+    "read_register": {
+      "name": "Read Register",
+      "description": "Read a Modbus register and optionally decode it.",
+      "fields": {
+        "address": {
+          "name": "Address",
+          "description": "Register address (0-based)"
+        },
+        "register_type": {
+          "name": "Register Type",
+          "description": "Use 'auto' to try all types (recommended)"
+        },
+        "data_type": {
+          "name": "Data Type",
+          "description": "How to interpret the value(s)"
+        },
+        "size": {
+          "name": "Size",
+          "description": "Number of registers/bits to read"
+        },
+        "byte_order": {
+          "name": "Byte Order",
+          "description": "Byte order for multi-byte values"
+        },
+        "word_order": {
+          "name": "Word Order",
+          "description": "Word order for multi-register values"
+        },
+        "raw": {
+          "name": "Raw Mode",
+          "description": "Return raw register values instead of decoded"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Write Register",
+      "description": "Write a value to a Modbus register with proper encoding.",
+      "fields": {
+        "address": {
+          "name": "Register Address",
+          "description": "Modbus register address"
+        },
+        "value": {
+          "name": "Value",
+          "description": "Value to write (packed according to data type)"
+        },
+        "register_type": {
+          "name": "Register Type",
+          "description": "Type of register to write to"
+        },
+        "data_type": {
+          "name": "Data Type",
+          "description": "How the value should be encoded"
+        },
+        "byte_order": {
+          "name": "Byte Order",
+          "description": "Byte order inside a register"
+        },
+        "word_order": {
+          "name": "Word Order",
+          "description": "Register order for multi-register values"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "Read SNMP OID",
+      "description": "Read an SNMP OID from an SNMP device.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier (e.g., 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Data Type",
+          "description": "Expected data type of the OID value"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "Write SNMP OID",
+      "description": "Write a value to an SNMP OID.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "SNMP Object Identifier"
+        },
+        "value": {
+          "name": "Value",
+          "description": "Value to write"
+        },
+        "data_type": {
+          "name": "Data Type",
+          "description": "Data type for the value"
+        }
+      }
+    }
+  }
 }
