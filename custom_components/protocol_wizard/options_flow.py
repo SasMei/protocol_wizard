@@ -107,7 +107,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             if coordinator:
                 coordinator.update_interval = timedelta(seconds=interval)
 
-            await self._save_options({CONF_UPDATE_INTERVAL: interval})
+            self._save_options({CONF_UPDATE_INTERVAL: interval})
             return self.async_abort(reason="settings_updated")
 
         current = self._config_entry.options.get(CONF_UPDATE_INTERVAL, 10)
@@ -389,15 +389,24 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         options = dict(self._config_entry.options)
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
-        await self.hass.config_entries.async_update_entry(self._config_entry, options=options)
-        
-        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+        # it says Async.. but is actually not?
+        # Check if update actually changed anything
+        changed = self.hass.config_entries.async_update_entry(
+            self._config_entry, 
+            options=options
+        )
+        if changed:
+            _LOGGER.info("Options changed, reloading integration")
+            await asyncio.sleep(1)
+            await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+        else:
+          _LOGGER.debug("Options unchanged, skipping reload")
 
-    async def _save_options(self, updates: dict):
+    def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
         options.update(updates)
         # strangely, this one does not need an await...
-        await self.hass.config_entries.async_update_entry(self._config_entry, options=options)
+        self.hass.config_entries.async_update_entry(self._config_entry, options=options)
 
     def _get_schema_handler(self):
         if self.protocol == CONF_PROTOCOL_SNMP:
