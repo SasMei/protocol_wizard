@@ -1,0 +1,87 @@
+{
+  "title": "Asistente de protocolo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Seleccionar protocolo",
+        "description": "Elija el protocolo para este dispositivo.",
+        "data": {
+          "protocol": "Protocolo"
+        }
+      },
+      "modbus_common": {
+        "title": "Configuración del dispositivo Modbus",
+        "description": "Configuración común para dispositivos Modbus.",
+        "data": {
+          "name": "Nombre del dispositivo",
+          "connection_type": "Tipo de conexión",
+          "slave_id": "ID esclavo",
+          "first_reg": "Primera dirección de registro (para prueba de conexión)",
+          "first_reg_size": "Número de registros a leer (para prueba de conexión)",
+          "update_interval": "Intervalo de actualización (segundos)"
+        }
+      },
+      "modbus_serial": {
+        "title": "Configuración Modbus serie",
+        "description": "Configuración del puerto serie.",
+        "data": {
+          "serial_port": "Puerto serie",
+          "baudrate": "Velocidad en baudios",
+          "parity": "Paridad",
+          "stopbits": "Bits de parada",
+          "bytesize": "Bits de datos"
+        }
+      },
+      "modbus_ip": {
+        "title": "Configuración Modbus TCP/UDP",
+        "description": "Configuración de red.",
+        "data": {
+          "host": "Host / Dirección IP",
+          "port": "Puerto",
+          "transport_type": "Tipo de transporte"
+        }
+      },
+      "snmp_common": {
+        "title": "Configuración del dispositivo SNMP",
+        "description": "Configuración de conexión SNMP.",
+        "data": {
+          "name": "Nombre del dispositivo",
+          "host": "Host / Dirección IP",
+          "port": "Puerto",
+          "community": "Cadena de comunidad",
+          "version": "Versión SNMP",
+          "update_interval": "Intervalo de actualización (segundos)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No se puede conectar al dispositivo. Verifique la configuración y el acceso a red/puerto.",
+      "invalid_auth": "Credenciales de autenticación inválidas.",
+      "unknown": "Se produjo un error inesperado."
+    },
+    "abort": {
+      "template_exported": "Plantilla exportada correctamente",
+      "template_deleted": "Plantilla eliminada correctamente"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones del asistente de protocolo",
+        "menu_options": {
+          "settings": "Configuración",
+          "add_entity": "Añadir entidad",
+          "load_template": "Cargar plantilla",
+          "list_entities": "Ver entidades",
+          "edit_entity": "Editar entidad"
+        }
+      },
+      "settings": {
+        "title": "Configuración del dispositivo",
+        "data": {
+          "update_interval": "Intervalo de actualización (segundos)"
+        }
+      }
+    }
+  }
+}
