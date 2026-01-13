@@ -1,247 +1,247 @@
 {
-  "title": "Protocol Wizard",
+  "title": "Kreator protokołu",
   "config": {
     "step": {
       "user": {
-        "title": "Select Protocol",
-        "description": "Choose the protocol for this device.",
+        "title": "Wybierz protokół",
+        "description": "Wybierz protokół dla tego urządzenia.",
         "data": {
-          "protocol": "Protocol"
+          "protocol": "Protokół"
         }
       },
       "modbus_common": {
-        "title": "Modbus Device Configuration",
-        "description": "Common settings for Modbus devices.",
+        "title": "Konfiguracja urządzenia Modbus",
+        "description": "Wspólne ustawienia dla urządzeń Modbus.",
         "data": {
-          "name": "Device Name",
-          "connection_type": "Connection Type",
-          "slave_id": "Slave ID",
-          "first_reg": "First Register Address (for connection test)",
-          "first_reg_size": "Number of Registers to Read (for connection test)",
-          "update_interval": "Update Interval (seconds)"
+          "name": "Nazwa urządzenia",
+          "connection_type": "Typ połączenia",
+          "slave_id": "ID slave",
+          "first_reg": "Pierwszy adres rejestru (do testu połączenia)",
+          "first_reg_size": "Liczba rejestrów do odczytu (do testu połączenia)",
+          "update_interval": "Interwał aktualizacji (sekundy)"
         }
       },
       "modbus_serial": {
-        "title": "Modbus Serial Configuration",
-        "description": "Serial port settings.",
+        "title": "Konfiguracja Modbus szeregowy",
+        "description": "Ustawienia portu szeregowego.",
         "data": {
-          "serial_port": "Serial Port",
-          "baudrate": "Baud Rate",
-          "parity": "Parity",
-          "stopbits": "Stop Bits",
-          "bytesize": "Data Bits"
+          "serial_port": "Port szeregowy",
+          "baudrate": "Szybkość transmisji (baud)",
+          "parity": "Parzystość",
+          "stopbits": "Bity stopu",
+          "bytesize": "Bity danych"
         }
       },
       "modbus_ip": {
-        "title": "Modbus TCP/UDP Configuration",
-        "description": "Network settings.",
+        "title": "Konfiguracja Modbus TCP/UDP",
+        "description": "Ustawienia sieciowe.",
         "data": {
-          "host": "Host / IP Address",
+          "host": "Host / Adres IP",
           "port": "Port",
-          "transport_type": "Transport Type"
+          "transport_type": "Typ transportu"
         }
       },
       "snmp_common": {
-        "title": "SNMP Device Configuration",
-        "description": "SNMP connection settings.",
+        "title": "Konfiguracja urządzenia SNMP",
+        "description": "Ustawienia połączenia SNMP.",
         "data": {
-          "name": "Device Name",
-          "host": "Host / IP Address",
+          "name": "Nazwa urządzenia",
+          "host": "Host / Adres IP",
           "port": "Port",
-          "community": "Community String",
-          "version": "SNMP Version",
-          "update_interval": "Update Interval (seconds)"
+          "community": "Ciąg społeczności (Community String)",
+          "version": "Wersja SNMP",
+          "update_interval": "Interwał aktualizacji (sekundy)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to the device. Check settings and network/port access.",
-      "invalid_auth": "Invalid authentication credentials.",
-      "unknown": "Unexpected error occurred."
+      "cannot_connect": "Nie można połączyć się z urządzeniem. Sprawdź ustawienia oraz dostęp do sieci i portu.",
+      "invalid_auth": "Nieprawidłowe dane uwierzytelniające.",
+      "unknown": "Wystąpił nieoczekiwany błąd."
     },
     "abort": {
-      "template_exported": "Template exported successfully",
-      "template_deleted": "Template deleted successfully"
+      "template_exported": "Szablon pomyślnie wyeksportowany",
+      "template_deleted": "Szablon pomyślnie usunięty"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Protocol Wizard Options",
+        "title": "Opcje Kreatora protokołu",
         "menu_options": {
-          "settings": "Settings",
-          "add_entity": "Add Entity",
-          "load_template": "Load Template",
-          "list_entities": "View Entities",
-          "edit_entity": "Edit Entity"
+          "settings": "Ustawienia",
+          "add_entity": "Dodaj encję",
+          "load_template": "Wczytaj szablon",
+          "list_entities": "Lista encji",
+          "edit_entity": "Edytuj encję"
         }
       },
       "settings": {
-        "title": "Device Settings",
+        "title": "Ustawienia urządzenia",
         "data": {
-          "update_interval": "Update Interval (seconds)"
+          "update_interval": "Interwał aktualizacji (sekundy)"
         }
       },
       "add_entity": {
-        "title": "Add New Entity",
+        "title": "Dodaj nową encję",
         "data": {
-          "name": "Entity Name",
-          "address": "Address",
-          "data_type": "Data Type",
-          "rw": "Read/Write Mode",
-          "read_mode": "Read Mode",
-          "format": "Format String",
-          "options": "Options"
+          "name": "Nazwa encji",
+          "address": "Adres",
+          "data_type": "Typ danych",
+          "rw": "Tryb odczytu/zapisu",
+          "read_mode": "Tryb odczytu",
+          "format": "Ciąg formatujący",
+          "options": "Opcje"
         },
         "data_description": {
-          "name": "Unique name for this entity",
-          "address": "Register address (Modbus) or OID (SNMP)",
-          "data_type": "How to interpret the raw value",
-          "rw": "Read-only, write-only, or both",
-          "read_mode": "Get: single value; Walk: full subtree (SNMP only)",
-          "format": "Optional string in json format to tranform value",
-          "options": "Optional JSON creating select entity (specify dict in json braces)"
+          "name": "Unikalna nazwa dla tej encji",
+          "address": "Adres rejestru (Modbus) lub OID (SNMP)",
+          "data_type": "Sposób interpretacji surowej wartości",
+          "rw": "Tylko odczyt, tylko zapis lub oba",
+          "read_mode": "Get: pojedyncza wartość; Walk: całe poddrzewo (tylko SNMP)",
+          "format": "Opcjonalny ciąg w formacie JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (wartość w nawiasach klamrowych JSON)"
         }
       },
       "edit_entity_form": {
-        "title": "Edit Entity",
+        "title": "Edytuj encję",
         "data": {
-          "name": "Entity Name",
-          "address": "Address",
-          "data_type": "Data Type",
-          "rw": "Read/Write Mode",
-          "format": "Format String",
-          "options": "Options"
+          "name": "Nazwa encji",
+          "address": "Adres",
+          "data_type": "Typ danych",
+          "rw": "Tryb odczytu/zapisu",
+          "format": "Ciąg formatujący",
+          "options": "Opcje"
         },
         "data_description": {
-          "name": "Unique name for this entity",
-          "address": "Register address (Modbus) or OID (SNMP)",
-          "data_type": "How to interpret the raw value",
-          "rw": "Read-only, write-only, or both",
-          "format": "Optional string in json format to tranform value",
-          "options": "Optional JSON creating select entity (specify dict in json braces)"
+          "name": "Unikalna nazwa dla tej encji",
+          "address": "Adres rejestru (Modbus) lub OID (SNMP)",
+          "data_type": "Sposób interpretacji surowej wartości",
+          "rw": "Tylko odczyt, tylko zapis lub oba",
+          "format": "Opcjonalny ciąg w formacie JSON do transformacji wartości",
+          "options": "Opcjonalny JSON tworzący encję wyboru (wartość w nawiasach klamrowych JSON)"
         }
       },
       "load_template": {
-        "title": "Load Device Template",
-        "description": "Select a device template to load. Available templates are shown in the dropdown below.",
+        "title": "Wczytaj szablon urządzenia",
+        "description": "Wybierz szablon urządzenia do wczytania. Dostępne szablony są wyświetlane w rozwijanej liście poniżej.",
         "data": {
-          "template": "Template"
+          "template": "Szablon"
         }
       }
     },
     "error": {
-      "load_failed": "Failed to load template.",
-      "template_empty_or_duplicate": "Template contains no new entities or all are duplicates.",
-      "template_not_found": "Template file not found."
+      "load_failed": "Nie udało się wczytać szablonu.",
+      "template_empty_or_duplicate": "Szablon nie zawiera nowych encji lub wszystkie są duplikatami.",
+      "template_not_found": "Nie znaleziono pliku szablonu."
     }
   },
   "entity": {
     "sensor": {
       "hub": {
-        "name": "{protocol} Hub",
+        "name": "Hub {protocol}",
         "state": {
-          "connected": "Connected",
-          "disconnected": "Disconnected",
-          "unknown": "Unknown"
+          "connected": "Połączony",
+          "disconnected": "Rozłączony",
+          "unknown": "Nieznany"
         }
       }
     }
   },
   "services": {
     "read_register": {
-      "name": "Read Register",
-      "description": "Read a Modbus register and optionally decode it.",
+      "name": "Odczyt rejestru",
+      "description": "Odczyt rejestru Modbus z opcjonalnym dekodowaniem.",
       "fields": {
         "address": {
-          "name": "Address",
-          "description": "Register address (0-based)"
+          "name": "Adres",
+          "description": "Adres rejestru (liczone od 0)"
         },
         "register_type": {
-          "name": "Register Type",
-          "description": "Use 'auto' to try all types (recommended)"
+          "name": "Typ rejestru",
+          "description": "Użyj 'auto', aby spróbować wszystkich typów (zalecane)"
         },
         "data_type": {
-          "name": "Data Type",
-          "description": "How to interpret the value(s)"
+          "name": "Typ danych",
+          "description": "Sposób interpretacji wartości"
         },
         "size": {
-          "name": "Size",
-          "description": "Number of registers/bits to read"
+          "name": "Rozmiar",
+          "description": "Liczba rejestrów/bitów do odczytania"
         },
         "byte_order": {
-          "name": "Byte Order",
-          "description": "Byte order for multi-byte values"
+          "name": "Kolejność bajtów",
+          "description": "Kolejność bajtów dla wartości wielobajtowych"
         },
         "word_order": {
-          "name": "Word Order",
-          "description": "Word order for multi-register values"
+          "name": "Kolejność słów",
+          "description": "Kolejność słów dla wartości wielorejestrowych"
         },
         "raw": {
-          "name": "Raw Mode",
-          "description": "Return raw register values instead of decoded"
+          "name": "Tryb surowy",
+          "description": "Zwróć surowe wartości rejestrów zamiast zdekodowanych"
         }
       }
     },
     "write_register": {
-      "name": "Write Register",
-      "description": "Write a value to a Modbus register with proper encoding.",
+      "name": "Zapis do rejestru",
+      "description": "Zapis wartości do rejestru Modbus z odpowiednim kodowaniem.",
       "fields": {
         "address": {
-          "name": "Register Address",
-          "description": "Modbus register address"
+          "name": "Adres rejestru",
+          "description": "Adres rejestru Modbus"
         },
         "value": {
-          "name": "Value",
-          "description": "Value to write (packed according to data type)"
+          "name": "Wartość",
+          "description": "Wartość do zapisania (spakowana zgodnie z typem danych)"
         },
         "register_type": {
-          "name": "Register Type",
-          "description": "Type of register to write to"
+          "name": "Typ rejestru",
+          "description": "Typ rejestru, do którego ma być zapis"
         },
         "data_type": {
-          "name": "Data Type",
-          "description": "How the value should be encoded"
+          "name": "Typ danych",
+          "description": "Sposób kodowania wartości"
         },
         "byte_order": {
-          "name": "Byte Order",
-          "description": "Byte order inside a register"
+          "name": "Kolejność bajtów",
+          "description": "Kolejność bajtów wewnątrz rejestru"
         },
         "word_order": {
-          "name": "Word Order",
-          "description": "Register order for multi-register values"
+          "name": "Kolejność słów",
+          "description": "Kolejność rejestrów dla wartości wielorejestrowych"
         }
       }
     },
     "read_snmp": {
-      "name": "Read SNMP OID",
-      "description": "Read an SNMP OID from an SNMP device.",
+      "name": "Odczyt OID SNMP",
+      "description": "Odczyt OID SNMP z urządzenia SNMP.",
       "fields": {
         "oid": {
           "name": "OID",
-          "description": "SNMP Object Identifier (e.g., 1.3.6.1.2.1.1.1.0)"
+          "description": "Identyfikator obiektu SNMP (np. 1.3.6.1.2.1.1.1.0)"
         },
         "data_type": {
-          "name": "Data Type",
-          "description": "Expected data type of the OID value"
+          "name": "Typ danych",
+          "description": "Oczekiwany typ danych wartości OID"
         }
       }
     },
     "write_snmp": {
-      "name": "Write SNMP OID",
-      "description": "Write a value to an SNMP OID.",
+      "name": "Zapis OID SNMP",
+      "description": "Zapis wartości do OID SNMP.",
       "fields": {
         "oid": {
           "name": "OID",
-          "description": "SNMP Object Identifier"
+          "description": "Identyfikator obiektu SNMP"
         },
         "value": {
-          "name": "Value",
-          "description": "Value to write"
+          "name": "Wartość",
+          "description": "Wartość do zapisania"
         },
         "data_type": {
-          "name": "Data Type",
-          "description": "Data type for the value"
+          "name": "Typ danych",
+          "description": "Typ danych dla zapisywanej wartości"
         }
       }
     }
