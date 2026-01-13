@@ -81,6 +81,168 @@
         "data": {
           "update_interval": "Intervalo de actualización (segundos)"
         }
+      },
+      "add_entity": {
+        "title": "Añadir nueva entidad",
+        "data": {
+          "name": "Nombre de la entidad",
+          "address": "Dirección",
+          "data_type": "Tipo de datos",
+          "rw": "Modo lectura/escritura",
+          "read_mode": "Modo de lectura",
+          "format": "Cadena de formato",
+          "options": "Opciones"
+        },
+        "data_description": {
+          "name": "Nombre único para esta entidad",
+          "address": "Dirección de registro (Modbus) o OID (SNMP)",
+          "data_type": "Cómo interpretar el valor crudo",
+          "rw": "Solo lectura, solo escritura o ambos",
+          "read_mode": "Get: valor único; Walk: subárbol completo (solo SNMP)",
+          "format": "Cadena JSON opcional para transformar el valor",
+          "options": "JSON opcional que crea una entidad de selección (especifique un diccionario entre llaves JSON)"
+        }
+      },
+      "edit_entity_form": {
+        "title": "Editar entidad",
+        "data": {
+          "name": "Nombre de la entidad",
+          "address": "Dirección",
+          "data_type": "Tipo de datos",
+          "rw": "Modo lectura/escritura",
+          "format": "Cadena de formato",
+          "options": "Opciones"
+        },
+        "data_description": {
+          "name": "Nombre único para esta entidad",
+          "address": "Dirección de registro (Modbus) o OID (SNMP)",
+          "data_type": "Cómo interpretar el valor crudo",
+          "rw": "Solo lectura, solo escritura o ambos",
+          "format": "Cadena JSON opcional para transformar el valor",
+          "options": "JSON opcional que crea una entidad de selección (especifique un diccionario entre llaves JSON)"
+        }
+      },
+      "load_template": {
+        "title": "Cargar plantilla de dispositivo",
+        "description": "Seleccione una plantilla de dispositivo para cargar. Las plantillas disponibles se muestran en el menú desplegable a continuación.",
+        "data": {
+          "template": "Plantilla"
+        }
+      }
+    },
+    "error": {
+      "load_failed": "Fallo al cargar la plantilla.",
+      "template_empty_or_duplicate": "La plantilla no contiene entidades nuevas o todas son duplicadas.",
+      "template_not_found": "No se encontró el archivo de plantilla."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hub": {
+        "name": "Hub {protocol}",
+        "state": {
+          "connected": "Conectado",
+          "disconnected": "Desconectado",
+          "unknown": "Desconocido"
+        }
+      }
+    }
+  },
+  "services": {
+    "read_register": {
+      "name": "Leer registro",
+      "description": "Leer un registro Modbus y opcionalmente decodificarlo.",
+      "fields": {
+        "address": {
+          "name": "Dirección",
+          "description": "Dirección del registro (base 0)"
+        },
+        "register_type": {
+          "name": "Tipo de registro",
+          "description": "Usar 'auto' para intentar todos los tipos (recomendado)"
+        },
+        "data_type": {
+          "name": "Tipo de datos",
+          "description": "Cómo interpretar el/los valor(es)"
+        },
+        "size": {
+          "name": "Tamaño",
+          "description": "Número de registros/bits a leer"
+        },
+        "byte_order": {
+          "name": "Orden de bytes",
+          "description": "Orden de bytes para valores multi-byte"
+        },
+        "word_order": {
+          "name": "Orden de palabras",
+          "description": "Orden de palabras para valores multi-registro"
+        },
+        "raw": {
+          "name": "Modo crudo",
+          "description": "Devolver valores crudos de registros en lugar de decodificados"
+        }
+      }
+    },
+    "write_register": {
+      "name": "Escribir registro",
+      "description": "Escribir un valor en un registro Modbus con la codificación adecuada.",
+      "fields": {
+        "address": {
+          "name": "Dirección del registro",
+          "description": "Dirección del registro Modbus"
+        },
+        "value": {
+          "name": "Valor",
+          "description": "Valor a escribir (empaquetado según el tipo de datos)"
+        },
+        "register_type": {
+          "name": "Tipo de registro",
+          "description": "Tipo de registro al que escribir"
+        },
+        "data_type": {
+          "name": "Tipo de datos",
+          "description": "Cómo debe codificarse el valor"
+        },
+        "byte_order": {
+          "name": "Orden de bytes",
+          "description": "Orden de bytes dentro de un registro"
+        },
+        "word_order": {
+          "name": "Orden de palabras",
+          "description": "Orden de registros para valores multi-registro"
+        }
+      }
+    },
+    "read_snmp": {
+      "name": "Leer OID SNMP",
+      "description": "Leer un OID SNMP desde un dispositivo SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identificador de objeto SNMP (ej. 1.3.6.1.2.1.1.1.0)"
+        },
+        "data_type": {
+          "name": "Tipo de datos",
+          "description": "Tipo de datos esperado del valor del OID"
+        }
+      }
+    },
+    "write_snmp": {
+      "name": "Escribir OID SNMP",
+      "description": "Escribir un valor en un OID SNMP.",
+      "fields": {
+        "oid": {
+          "name": "OID",
+          "description": "Identificador de objeto SNMP"
+        },
+        "value": {
+          "name": "Valor",
+          "description": "Valor a escribir"
+        },
+        "data_type": {
+          "name": "Tipo de datos",
+          "description": "Tipo de datos para el valor a escribir"
+        }
       }
     }
   }
