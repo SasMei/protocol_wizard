@@ -390,10 +390,11 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
         options[config_key] = self._entities
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
-        await asyncio.sleep(0.1) # give the options time to be written
-        self.hass.async_create_task(
-            self.hass.config_entries.async_reload(self._config_entry.entry_id)
-        )
+        await asyncio.sleep(1) # give the options time to be written
+        # Seems we are batteling some form of race condition
+#        self.hass.async_create_task(
+#            self.hass.config_entries.async_reload(self._config_entry.entry_id)
+#        )
 
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
