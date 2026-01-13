@@ -1,5 +1,11 @@
 ## Changelog
 
+### [0.7.0] - Ehanced Template Handling
+- User specific template can be chosen and store separately
+- User templates will not be deleted at update (are stored elsewhere)
+- Ability to delete User Template
+- Poplular language files added
+ 
 ### [0.6.0] - MQTT added
 - Adding MQTT protocol support
 - Includes full read / write with card
