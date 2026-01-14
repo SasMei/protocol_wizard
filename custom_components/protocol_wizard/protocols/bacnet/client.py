@@ -47,23 +47,31 @@ class BACnetClient:
     
     async def connect(self) -> bool:
         """
-        Connect to BACnet network asynchronously.
+        Connect to BACnet network - BAC0 is sync but needs main loop.
         """
         try:
-            _LOGGER.info("Connecting to BACnet network on %s:%s", self.host, self.port)
+            _LOGGER.info("Connecting to BACnet network on %s:%s (deviceId: %s)", 
+                         self.host, self.port, self.device_id)
     
-            # Use BAC0.start() as async context manager (recommended in 2025+ docs)
-            self.bacnet = await BAC0.start(
-                ip=self.host,          # or '0.0.0.0' for broadcast
-                port=self.port,
-                deviceId=self.device_id if self.device_id is not None else 999999,  # fallback if None
-                # Optional: bbmdAddress if needed, etc.
-            )
+            # Run synchronous BAC0.start() in a thread, but let it access the main loop
+            def _start_bacnet():
+                return BAC0.start(
+                    ip=self.host,
+                    port=self.port,
+                    deviceId=self.device_id or 999999  # required
+                )
     
-            # Wait a moment for initialization
-            await asyncio.sleep(0.5)
+            # Use asyncio.to_thread (preserves loop context)
+            self.bacnet = await asyncio.to_thread(_start_bacnet)
     
-            _LOGGER.info("BACnet connection established")
+            # Wait for BAC0 to fully initialize its tasks
+            await asyncio.sleep(2.0)
+    
+            if not self.bacnet:
+                _LOGGER.error("BAC0 instance is None")
+                return False
+    
+            _LOGGER.info("BACnet connection established (BAC0 ready)")
             self._connected = True
             return True
     
@@ -83,20 +91,13 @@ class BACnetClient:
                 if not await self.connect():
                     return []
     
-            # Use async discover if available, or run sync in executor as fallback
-            _LOGGER.info("Sending Who-Is broadcast...")
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                self.bacnet.discover
-            )
+            # discover() is synchronous
+            await asyncio.get_running_loop().run_in_executor(None, self.bacnet.discover)
     
-            _LOGGER.info("Waiting %ds for I-Am responses...", timeout)
             await asyncio.sleep(timeout)
     
-            # Collect discovered devices (sync part)
-            devices = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._collect_discovered_devices
+            devices = await asyncio.get_running_loop().run_in_executor(
+                None, self._collect_discovered_devices
             )
     
             _LOGGER.info("Discovered %d BACnet devices", len(devices))
@@ -105,7 +106,7 @@ class BACnetClient:
         except Exception as err:
             _LOGGER.error("BACnet discovery failed: %s", err)
             return []
-    
+        
     
     def _collect_discovered_devices(self) -> list[dict]:
         """Collect devices from registered_devices (runs in executor)."""
