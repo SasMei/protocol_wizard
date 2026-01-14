@@ -192,40 +192,22 @@ class BACnetClient:
                 _LOGGER.error("Cannot discover without BACnet connection")
                 return []
             
-            # Perform Who-Is discovery
-            discovered = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._discover_devices_blocking,
-                timeout
-            )
-            
-            _LOGGER.info("Discovered %d BACnet devices", len(discovered))
-            return discovered
-        
-        except Exception as err:
-            _LOGGER.error("BACnet discovery failed: %s", err)
-            return []
-    
-    
-    def _discover_devices_blocking(self, timeout: int) -> list[dict]:
-        """
-        Blocking discovery function.
-        
-        Returns:
-            List of dicts with device info
-        """
-        import time
-        
-        devices = []
-        
-        try:
+            # BAC0 2025+ discover() is async, call it directly
             _LOGGER.info("Sending Who-Is broadcast...")
             
-            # Try new API: discover()
             try:
+                # Try calling discover directly (it's async in 2025+)
                 self.bacnet.discover()
+            except RuntimeError as err:
+                if "no running event loop" in str(err):
+                    _LOGGER.warning("discover() is async but called from sync context")
+                    # discover() creates async tasks internally, we can't await it
+                    # Just let it run
+                    pass
+                else:
+                    raise
             except AttributeError:
-                # Fall back to old API: whois()
+                # Fall back to old API
                 try:
                     self.bacnet.whois()
                 except AttributeError:
@@ -234,14 +216,33 @@ class BACnetClient:
             
             # Wait for I-Am responses
             _LOGGER.info("Waiting %ds for I-Am responses...", timeout)
-            time.sleep(timeout)
+            await asyncio.sleep(timeout)
             
             # Collect discovered devices
+            devices = self._collect_discovered_devices()
+            
+            _LOGGER.info("Discovered %d BACnet devices", len(devices))
+            return devices
+        
+        except Exception as err:
+            _LOGGER.error("BACnet discovery failed: %s", err)
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    
+    def _collect_discovered_devices(self) -> list[dict]:
+        """Collect devices from registered_devices or devices."""
+        devices = []
+        
+        try:
+            # Get device list
             device_list = getattr(self.bacnet, 'registered_devices', None)
             if device_list is None:
                 device_list = getattr(self.bacnet, 'devices', {})
             
-            _LOGGER.info("Processing discovered devices (type: %s)", type(device_list))
+            _LOGGER.info("Processing discovered devices (type: %s, count: %s)", 
+                        type(device_list), len(device_list) if hasattr(device_list, '__len__') else '?')
             
             # Handle dict of devices
             if isinstance(device_list, dict):
@@ -271,7 +272,7 @@ class BACnetClient:
                         _LOGGER.warning("Error parsing device: %s", err)
         
         except Exception as err:
-            _LOGGER.error("Error during Who-Is discovery: %s", err)
+            _LOGGER.error("Error collecting devices: %s", err)
             import traceback
             traceback.print_exc()
         
