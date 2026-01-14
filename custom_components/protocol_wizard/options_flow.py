@@ -818,7 +818,7 @@ class BACnetSchemaHandler:
             processed["min"] = float(processed.get("min", 0.0))
             processed["max"] = float(processed.get("max", 100.0))
             processed["step"] = float(processed.get("step", 1.0))
-        except (ValueError, TypeError) as err:
+        except (ValueError, TypeError):
             errors["scale"] = "Invalid numeric value"
             return None
         
