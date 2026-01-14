@@ -20,7 +20,6 @@ from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
 from .protocols.mqtt import MQTTClient
 from .protocols.bacnet.client import BACnetClient
-from .protocols.bacnet.coordinator import BACnetCoordinator
 from .template_utils import ensure_user_template_dirs, load_template
 
 from .const import (
