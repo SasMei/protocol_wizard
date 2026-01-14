@@ -47,32 +47,26 @@ class BACnetClient:
     
     async def connect(self) -> bool:
         """
-        Connect to BACnet network.
-        
-        Returns:
-            True if connection successful, False otherwise
+        Connect to BACnet network asynchronously.
         """
         try:
             _LOGGER.info("Connecting to BACnet network on %s:%s", self.host, self.port)
-            
-            # BAC0.connect() is synchronous, returns immediately
-            # Run in executor to avoid blocking
-            self.bacnet = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: BAC0.connect(ip=self.host, port=self.port)
+    
+            # Use BAC0.start() as async context manager (recommended in 2025+ docs)
+            self.bacnet = await BAC0.start(
+                ip=self.host,          # or '0.0.0.0' for broadcast
+                port=self.port,
+                device_id=self.device_id if self.device_id else None,
+                # Optional: bbmdAddress if needed, etc.
             )
-            
-            if not self.bacnet:
-                _LOGGER.error("Failed to create BACnet connection")
-                return False
-            
-            # Give connection a moment to initialize
+    
+            # Wait a moment for initialization
             await asyncio.sleep(0.5)
-            
+    
             _LOGGER.info("BACnet connection established")
             self._connected = True
             return True
-        
+    
         except Exception as err:
             _LOGGER.error("BACnet connection failed: %s", err)
             import traceback
@@ -82,51 +76,34 @@ class BACnetClient:
     
     
     async def discover_devices(self, timeout: int = 10) -> list[dict]:
-        """
-        Discover BACnet devices on the network using Who-Is.
-        
-        Args:
-            timeout: Discovery timeout in seconds
-        
-        Returns:
-            List of discovered devices with their properties
-        """
         try:
             _LOGGER.info("Starting BACnet device discovery (timeout: %ds)", timeout)
-            
-            # Ensure connection
-            if not self.bacnet:
-                await self.connect()
-            
-            if not self.bacnet:
-                _LOGGER.error("Cannot discover without BACnet connection")
-                return []
-            
-            # Trigger Who-Is broadcast
-            # discover() is synchronous but triggers async tasks internally
+    
+            if not self._connected:
+                if not await self.connect():
+                    return []
+    
+            # Use async discover if available, or run sync in executor as fallback
             _LOGGER.info("Sending Who-Is broadcast...")
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 self.bacnet.discover
             )
-            
-            # Wait for I-Am responses
+    
             _LOGGER.info("Waiting %ds for I-Am responses...", timeout)
             await asyncio.sleep(timeout)
-            
-            # Collect discovered devices
+    
+            # Collect discovered devices (sync part)
             devices = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self._collect_discovered_devices
             )
-            
+    
             _LOGGER.info("Discovered %d BACnet devices", len(devices))
             return devices
-        
+    
         except Exception as err:
             _LOGGER.error("BACnet discovery failed: %s", err)
-            import traceback
-            traceback.print_exc()
             return []
     
     
