@@ -8,6 +8,7 @@ _LOGGER = logging.getLogger(__name__)
 
 try:
     import BAC0
+ #   from BAC0.core.devices.Device import Device
     HAS_BAC0 = True
 except ImportError:
     HAS_BAC0 = False
@@ -57,11 +58,8 @@ class BACnetClient:
             _LOGGER.info("Connecting to BACnet device %s:%s (ID: %s)", 
                         self.host, self.port, self.device_id)
             
-            # Create BAC0 connection
-            self.bacnet = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._create_bacnet_connection
-            )
+            # Create BAC0 connection (now async)
+            self.bacnet = await self._create_bacnet_connection()
             
             if not self.bacnet:
                 _LOGGER.error("Failed to create BACnet connection")
@@ -71,7 +69,7 @@ class BACnetClient:
             if self.device_id is not None:
                 device_address = f"{self.host}:{self.port}"
                 
-                # Discover device
+                # Discover device (blocking call, use executor)
                 self.device = await asyncio.get_event_loop().run_in_executor(
                     None,
                     self.bacnet.discover,
@@ -96,12 +94,16 @@ class BACnetClient:
             return False
     
     
-    def _create_bacnet_connection(self):
-        """Create BAC0 connection (blocking, run in executor)."""
+    async def _create_bacnet_connection(self):
+        """Create BAC0 connection (async)."""
         try:
-            # Connect to BACnet network
+            # BAC0 2025+ is async, so we can call it directly
             # Using specific IP if provided, or 0.0.0.0 for discovery
             bacnet = BAC0.connect(ip=self.host, port=self.port)
+            
+            # Give it a moment to initialize
+            await asyncio.sleep(0.5)
+            
             return bacnet
         except Exception as err:
             _LOGGER.error("Failed to create BAC0 connection: %s", err)
@@ -322,10 +324,14 @@ class BACnetClient:
         """Disconnect from BACnet device."""
         if self.bacnet:
             try:
-                await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    self.bacnet.disconnect
-                )
+                # BAC0 disconnect might be async or sync, handle both
+                if asyncio.iscoroutinefunction(self.bacnet.disconnect):
+                    await self.bacnet.disconnect()
+                else:
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        self.bacnet.disconnect
+                    )
                 _LOGGER.info("Disconnected from BACnet device")
             except Exception as err:
                 _LOGGER.error("Error disconnecting: %s", err)
