@@ -11,6 +11,8 @@ CONF_ENTITIES = "entities"
 BACnet_DATA_TYPES = [
     "string",
     "integer",
+    "float",
+    "boolean",
 ]
 
 def oid_key(name: str) -> str:
