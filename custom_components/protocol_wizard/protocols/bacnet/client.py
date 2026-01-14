@@ -56,7 +56,7 @@ class BACnetClient:
             self.bacnet = await BAC0.start(
                 ip=self.host,          # or '0.0.0.0' for broadcast
                 port=self.port,
-                device_id=self.device_id if self.device_id else None,
+                deviceId=self.device_id if self.device_id is not None else 999999,  # fallback if None
                 # Optional: bbmdAddress if needed, etc.
             )
     
