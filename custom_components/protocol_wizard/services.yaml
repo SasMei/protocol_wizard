@@ -598,3 +598,9 @@ write_bacnet:
     priority: write priority (1-16, default 8)
     scale: reverse scaling
     offset: reverse offset
+discover_bacnet:
+  name: Discover BACnet Devices
+  description: Scan the network for BACnet devices using Who-Is broadcast.
+  fields:
+    timeout: discovery timeout (5-60 seconds)
+    network_number: optional network to scan
