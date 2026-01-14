@@ -1,4 +1,5 @@
-"""BACnet/IP client for Protocol Wizard."""
+# protocols/bacnet/client.py
+"""BACnet/IP client for Protocol Wizard - Updated for BAC0 2025+."""
 
 import logging
 import asyncio
@@ -8,7 +9,6 @@ _LOGGER = logging.getLogger(__name__)
 
 try:
     import BAC0
- #   from BAC0.core.devices.Device import Device
     HAS_BAC0 = True
 except ImportError:
     HAS_BAC0 = False
@@ -16,7 +16,7 @@ except ImportError:
 
 
 class BACnetClient:
-    """BACnet/IP client wrapper for BAC0."""
+    """BACnet/IP client wrapper for BAC0 2025+."""
     
     def __init__(
         self, 
@@ -54,11 +54,10 @@ class BACnetClient:
             True if connection successful, False otherwise
         """
         try:
-            # BAC0.connect is blocking, run in executor
             _LOGGER.info("Connecting to BACnet device %s:%s (ID: %s)", 
                         self.host, self.port, self.device_id)
             
-            # Create BAC0 connection (now async)
+            # Create BAC0 connection
             self.bacnet = await self._create_bacnet_connection()
             
             if not self.bacnet:
@@ -67,29 +66,28 @@ class BACnetClient:
             
             # Connect to specific device if device_id provided
             if self.device_id is not None:
-                device_address = f"{self.host}:{self.port}"
+                # In BAC0 2025+, devices are registered after discovery
+                # First trigger discovery to populate registered_devices
+                await self._trigger_discovery_if_needed()
                 
-                # Discover device (blocking call, use executor)
-                self.device = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    self.bacnet.discover,
-                    device_address,
-                    self.device_id
-                )
+                # Look for device in registered_devices
+                self.device = self._find_device_by_id(self.device_id)
                 
                 if not self.device:
                     _LOGGER.error("Device ID %s not found at %s", 
-                                self.device_id, device_address)
+                                self.device_id, self.host)
                     return False
                 
-                _LOGGER.info("Connected to BACnet device: %s", 
-                           self.device.properties.name)
+                device_name = self._get_device_property(self.device, 'objectName', 'Unknown')
+                _LOGGER.info("Connected to BACnet device: %s", device_name)
             
             self._connected = True
             return True
         
         except Exception as err:
             _LOGGER.error("BACnet connection failed: %s", err)
+            import traceback
+            traceback.print_exc()
             self._connected = False
             return False
     
@@ -97,8 +95,7 @@ class BACnetClient:
     async def _create_bacnet_connection(self):
         """Create BAC0 connection (async)."""
         try:
-            # BAC0 2025+ is async, so we can call it directly
-            # Using specific IP if provided, or 0.0.0.0 for discovery
+            # BAC0 2025+ is async-aware
             bacnet = BAC0.connect(ip=self.host, port=self.port)
             
             # Give it a moment to initialize
@@ -108,6 +105,70 @@ class BACnetClient:
         except Exception as err:
             _LOGGER.error("Failed to create BAC0 connection: %s", err)
             return None
+    
+    
+    async def _trigger_discovery_if_needed(self):
+        """Trigger discovery to populate registered_devices."""
+        try:
+            # Send Who-Is to discover devices
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                self.bacnet.discover
+            )
+            
+            # Wait for I-Am responses
+            await asyncio.sleep(2)
+        except Exception as err:
+            _LOGGER.warning("Discovery trigger failed: %s", err)
+    
+    
+    def _find_device_by_id(self, device_id: int):
+        """Find device in registered_devices by instance ID."""
+        try:
+            # Try new API: registered_devices (dict or list)
+            registered = getattr(self.bacnet, 'registered_devices', None)
+            
+            if isinstance(registered, dict):
+                # Dict: device_id -> device_object
+                return registered.get(device_id)
+            
+            elif hasattr(registered, '__iter__'):
+                # List of device objects
+                for device in registered:
+                    dev_id = self._get_device_property(device, 'device_id', None)
+                    if dev_id == device_id:
+                        return device
+            
+            # Try old API: devices
+            devices = getattr(self.bacnet, 'devices', {})
+            if device_id in devices:
+                return devices[device_id]
+            
+            return None
+        
+        except Exception as err:
+            _LOGGER.error("Error finding device: %s", err)
+            return None
+    
+    
+    def _get_device_property(self, device, prop_name: str, default=None):
+        """Safely get property from device object."""
+        try:
+            # Try direct attribute
+            if hasattr(device, prop_name):
+                return getattr(device, prop_name)
+            
+            # Try properties dict
+            if hasattr(device, 'properties') and hasattr(device.properties, prop_name):
+                return getattr(device.properties, prop_name)
+            
+            # Try dict access
+            if isinstance(device, dict):
+                return device.get(prop_name, default)
+            
+            return default
+        except:
+            return default
     
     
     async def discover_devices(self, timeout: int = 10) -> list[dict]:
@@ -151,59 +212,111 @@ class BACnetClient:
         Blocking discovery function.
         
         Returns:
-            List of dicts with device info: {
-                'device_id': int,
-                'address': str,
-                'port': int,
-                'name': str,
-                'vendor': str
-            }
+            List of dicts with device info
         """
         import time
         
         devices = []
         
         try:
-            # Send Who-Is broadcast
-            self.bacnet.whois()
+            _LOGGER.info("Sending Who-Is broadcast...")
+            
+            # Try new API: discover()
+            try:
+                self.bacnet.discover()
+            except AttributeError:
+                # Fall back to old API: whois()
+                try:
+                    self.bacnet.whois()
+                except AttributeError:
+                    _LOGGER.error("Cannot find discover() or whois() method")
+                    return []
             
             # Wait for I-Am responses
+            _LOGGER.info("Waiting %ds for I-Am responses...", timeout)
             time.sleep(timeout)
             
             # Collect discovered devices
-            for device_id, device_info in self.bacnet.devices.items():
-                try:
-                    # Parse device address
-                    address_parts = device_info[2].split(':')
-                    ip = address_parts[0]
-                    port = int(address_parts[1]) if len(address_parts) > 1 else 47808
-                    
-                    # Try to get device name
-                    device_name = "Unknown"
-                    vendor_name = "Unknown"
-                    
+            device_list = getattr(self.bacnet, 'registered_devices', None)
+            if device_list is None:
+                device_list = getattr(self.bacnet, 'devices', {})
+            
+            _LOGGER.info("Processing discovered devices (type: %s)", type(device_list))
+            
+            # Handle dict of devices
+            if isinstance(device_list, dict):
+                for device_id, device_info in device_list.items():
                     try:
-                        # Some devices provide name in discovery
-                        device_name = device_info[1] if len(device_info) > 1 else "Unknown"
-                    except:
-                        pass
-                    
-                    devices.append({
-                        'device_id': device_id,
-                        'address': ip,
-                        'port': port,
-                        'name': device_name,
-                        'vendor': vendor_name,
-                    })
-                
-                except Exception as err:
-                    _LOGGER.warning("Error parsing device %s: %s", device_id, err)
-                    continue
+                        device_dict = self._parse_device_info(device_id, device_info)
+                        if device_dict:
+                            devices.append(device_dict)
+                    except Exception as err:
+                        _LOGGER.warning("Error parsing device %s: %s", device_id, err)
+            
+            # Handle list/iterable of devices
+            elif hasattr(device_list, '__iter__'):
+                for device in device_list:
+                    try:
+                        device_id = self._get_device_property(device, 'device_id', None)
+                        if not device_id:
+                            # Try objectIdentifier tuple
+                            obj_id = self._get_device_property(device, 'objectIdentifier', (None, None))
+                            device_id = obj_id[1] if isinstance(obj_id, tuple) and len(obj_id) > 1 else None
+                        
+                        if device_id:
+                            device_dict = self._parse_device_info(device_id, device)
+                            if device_dict:
+                                devices.append(device_dict)
+                    except Exception as err:
+                        _LOGGER.warning("Error parsing device: %s", err)
         
         except Exception as err:
             _LOGGER.error("Error during Who-Is discovery: %s", err)
+            import traceback
+            traceback.print_exc()
         
         return devices
+    
+    
+    def _parse_device_info(self, device_id, device_info) -> Optional[dict]:
+        """Parse device info into standardized dict."""
+        try:
+            # Try to extract info from device object
+            if hasattr(device_info, '__dict__') or hasattr(device_info, 'address'):
+                # It's a device object
+                address = str(self._get_device_property(device_info, 'address', '127.0.0.1'))
+                address = address.split(':')[0] if ':' in address else address
+                
+                name = self._get_device_property(device_info, 'objectName', None)
+                if not name:
+                    name = self._get_device_property(device_info, 'name', 'Unknown')
+                
+                vendor = self._get_device_property(device_info, 'vendorName', 'Unknown')
+                port = 47808
+            
+            # Handle tuple/list format (old API)
+            elif isinstance(device_info, (tuple, list)) and len(device_info) >= 3:
+                address_str = str(device_info[2])
+                address = address_str.split(':')[0]
+                port = int(address_str.split(':')[1]) if ':' in address_str else 47808
+                name = device_info[1] if len(device_info) > 1 else "Unknown"
+                vendor = "Unknown"
+            
+            else:
+                _LOGGER.warning("Unknown device info format: %s", type(device_info))
+                return None
+            
+            return {
+                'device_id': int(device_id),
+                'address': address,
+                'port': port,
+                'name': name,
+                'vendor': vendor,
+            }
+        
+        except Exception as err:
+            _LOGGER.warning("Error parsing device info: %s", err)
+            return None
     
     
     async def get_device_name(self) -> Optional[str]:
@@ -217,11 +330,10 @@ class BACnetClient:
             if not self._connected or not self.device:
                 return None
             
-            # Get device name property
-            name = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.device.properties.name
-            )
+            # Try to get name from device object
+            name = self._get_device_property(self.device, 'objectName', None)
+            if not name:
+                name = self._get_device_property(self.device, 'name', None)
             
             return name
         
@@ -247,27 +359,39 @@ class BACnetClient:
         Returns:
             Property value or None if read failed
         """
-        if not self._connected or not self.device:
+        if not self._connected:
             _LOGGER.error("Not connected to BACnet device")
             return None
         
         try:
-            # Build BACnet address string
-            obj_id = f"{object_type}:{object_instance}"
+            # BAC0 2025+ uses bacnet.read() with full address string
+            # Format: "device_address object_type object_instance property_name"
             
-            # Read property
+            device_address = f"{self.host}:{self.port}"
+            
+            # If we have device instance, include it
+            if self.device_id:
+                device_address = f"{self.host}:{self.port}@{self.device_id}"
+            
+            read_string = f"{device_address} {object_type} {object_instance} {property_name}"
+            
+            _LOGGER.debug("Reading: %s", read_string)
+            
+            # Read property using BAC0's read method
             result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.device.read_property,
-                obj_id,
-                property_name
+                self.bacnet.read,
+                read_string
             )
             
+            _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
             return result
         
         except Exception as err:
             _LOGGER.error("Read failed for %s:%s.%s: %s", 
                          object_type, object_instance, property_name, err)
+            import traceback
+            traceback.print_exc()
             return None
     
     
@@ -292,31 +416,40 @@ class BACnetClient:
         Returns:
             True if write successful, False otherwise
         """
-        if not self._connected or not self.device:
+        if not self._connected:
             _LOGGER.error("Not connected to BACnet device")
             return False
         
         try:
-            # Build BACnet address string
-            obj_id = f"{object_type}:{object_instance}"
+            # BAC0 2025+ uses bacnet.write() with full address string
+            # Format: "device_address object_type object_instance property_name value - priority"
             
-            # Write property
+            device_address = f"{self.host}:{self.port}"
+            
+            # If we have device instance, include it
+            if self.device_id:
+                device_address = f"{self.host}:{self.port}@{self.device_id}"
+            
+            write_string = f"{device_address} {object_type} {object_instance} {property_name} {value} - {priority}"
+            
+            _LOGGER.debug("Writing: %s", write_string)
+            
+            # Write property using BAC0's write method
             await asyncio.get_event_loop().run_in_executor(
                 None,
-                self.device.write_property,
-                obj_id,
-                property_name,
-                value,
-                priority
+                self.bacnet.write,
+                write_string
             )
             
-            _LOGGER.debug("Wrote %s to %s:%s.%s", 
-                         value, object_type, object_instance, property_name)
+            _LOGGER.info("Wrote %s to %s:%s.%s (priority %d)", 
+                         value, object_type, object_instance, property_name, priority)
             return True
         
         except Exception as err:
             _LOGGER.error("Write failed for %s:%s.%s: %s", 
                          object_type, object_instance, property_name, err)
+            import traceback
+            traceback.print_exc()
             return False
     
     
@@ -324,7 +457,7 @@ class BACnetClient:
         """Disconnect from BACnet device."""
         if self.bacnet:
             try:
-                # BAC0 disconnect might be async or sync, handle both
+                # BAC0 disconnect might be async or sync
                 if asyncio.iscoroutinefunction(self.bacnet.disconnect):
                     await self.bacnet.disconnect()
                 else:
