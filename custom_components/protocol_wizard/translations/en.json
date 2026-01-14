@@ -246,4 +246,40 @@
       }
     }
   }
+  "config": {
+    "error": {
+      "no_devices_found": "No BACnet devices discovered. Try manual entry.",
+      "discovery_timeout": "Device discovery timed out. Check network and try again.",
+      "discovery_failed": "Discovery failed. Check network or use manual entry.",
+      "invalid_input": "Invalid input values. Check device ID and network number."
+    },
+    "step": {
+      "bacnet_common": {
+        "title": "BACnet Connection Method",
+        "description": "Choose how to configure your BACnet device. Discovery will scan your network for BACnet/IP devices.",
+        "data": {
+          "method": "Connection Method"
+        }
+      },
+      "bacnet_discover": {
+        "title": "Discovered BACnet Devices",
+        "description": "Select a BACnet device from the list. Found {count} devices.",
+        "data": {
+          "device": "Device",
+          "retry": "Retry Discovery"
+        }
+      },
+      "bacnet_manual": {
+        "title": "Manual BACnet Configuration",
+        "description": "{info}",
+        "data": {
+          "name": "Device Name",
+          "host": "IP Address",
+          "device_id": "Device ID (Instance)",
+          "port": "UDP Port",
+          "network_number": "Network Number (Optional)"
+        }
+      }
+    }
+  }
 }
