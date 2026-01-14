@@ -167,7 +167,7 @@ class BACnetClient:
                 return device.get(prop_name, default)
             
             return default
-        except:
+        except Exception:
             return default
     
     
