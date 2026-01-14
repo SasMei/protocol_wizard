@@ -26,10 +26,11 @@ from .const import (
     CONF_PROTOCOL,
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
+    CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
-    CONF_PROTOCOL_MQTT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -618,7 +619,97 @@ class ModbusSchemaHandler:
         
         return added
 
-
+# options_flow.py
+class BACnetSchemaHandler:
+    """Schema handler for BACnet entities."""
+    
+    config_key = CONF_REGISTERS
+    
+    def get_schema(self, defaults=None):
+        """Return schema for BACnet entity configuration."""
+        defaults = defaults or {}
+        return vol.Schema({
+            vol.Required("name", default=defaults.get("name")): str,
+            # BACnet address format: "objectType:instance:property"
+            vol.Required("address", default=defaults.get("address")): str,
+            vol.Required("data_type", default=defaults.get("data_type", "float")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["float", "integer", "boolean", "string"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            vol.Optional("rw", default=defaults.get("rw", "read")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=["read", "write", "rw"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            vol.Optional("device_class", default=defaults.get("device_class", " ")): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[" ", "temperature", "power", "energy", "voltage", "current", "frequency", "duration"],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional("state_class", default=defaults.get("state_class", " ")): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[" ", "measurement", "total", "total_increasing"],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional("entity_category", default=defaults.get("entity_category", " ")): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[" ", "diagnostic", "config", "system"],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional("icon", default=defaults.get("icon", "")): str,  # e.g. mdi:thermometer
+            vol.Optional("scale", default=defaults.get("scale", 1.0)): vol.Coerce(float),
+            vol.Optional("offset", default=defaults.get("offset", 0.0)): vol.Coerce(float),
+            vol.Optional("format", default=defaults.get("format", "")): str,
+        
+        })
+    
+    def process_input(self, user_input, errors, existing=None):
+        """Process and validate BACnet entity input."""
+        # Validate address format
+        address = user_input.get("address", "")
+        if not address:
+            errors["address"] = "required"
+            return None
+        
+        # Validate BACnet address format: "objectType:instance:property"
+        parts = address.split(":")
+        if len(parts) != 3:
+            errors["address"] = "invalid_format"
+            return None
+        
+        # Start with existing data (for edits) or empty dict
+        processed = dict(existing) if existing else {}
+        
+        # Update with new values, handling empty strings properly
+        for key, value in user_input.items():
+            if value in (" ","", None):
+                processed.pop(key, None)  # Clear if empty
+            elif value is not None:
+                processed[key] = value        
+        
+        # Convert types
+        try:
+            processed["scale"] = float(processed.get("scale", 1.0))
+            processed["offset"] = float(processed.get("offset", 0.0))
+        except (ValueError, TypeError) as err:
+            _LOGGER.error("Type conversion error: %s", err)
+            errors["scale"] = "invalid_number"
+            return None
+        
+        # Ensure required fields exist with defaults
+        processed.setdefault("data_type", "string")
+        processed.setdefault("scale", 1.0)
+        processed.setdefault("offset", 0.0)
+        
+        return processed
 
 class SNMPSchemaHandler:
     config_key = CONF_ENTITIES
