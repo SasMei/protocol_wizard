@@ -311,11 +311,12 @@ def _create_mqtt_client(config: dict) -> MQTTClient:
     )
     
 def _create_bacnet_client(config: dict) -> BACnetClient:
-    """Create BACnetclient (no caching needed - connectionless)."""
-  
+    """Create BACnet client (no caching needed - connectionless)."""
     return BACnetClient(
         host=config[CONF_HOST],
-        device_id=config["device_id"]
+        device_id=config["device_id"],
+        port=config.get(CONF_PORT, 47808),
+        network_number=config.get("network_number")
     )
     
 async def async_setup_services(hass: HomeAssistant) -> None:
