@@ -38,6 +38,7 @@ from .const import (
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
     CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
     CONF_IP,
     CONF_TEMPLATE,
@@ -82,6 +83,8 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_snmp_common()
             elif self._protocol == CONF_PROTOCOL_MQTT:
                 return await self.async_step_mqtt_common()       
+            elif self._protocol == CONF_PROTOCOL_BACNET:
+                return await self.async_step_bacnet_common()       
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
@@ -484,7 +487,49 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(schema_dict),
             errors=errors,
         )
-    
+        
+    async def async_step_bacnet_common(self, user_input=None):
+        """Configure BACnet connection."""
+        errors = {}
+        
+        if user_input:
+            # Validate and create entry
+            try:
+                # Test connection
+                from .protocols.bacnet.client import BACnetClient
+                client = BACnetClient(
+                    user_input[CONF_HOST],
+                    user_input["device_id"]
+                )
+                if await client.connect():
+                    await client.disconnect()
+                    
+                    return self.async_create_entry(
+                        title=user_input[CONF_NAME],
+                        data={
+                            CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
+                            CONF_NAME: user_input[CONF_NAME],
+                            CONF_HOST: user_input[CONF_HOST],
+                            "device_id": user_input["device_id"],
+                        }
+                    )
+                else:
+                    errors["base"] = "cannot_connect"
+            except Exception:
+                errors["base"] = "unknown"
+        
+        return self.async_show_form(
+            step_id="bacnet_common",
+            data_schema=vol.Schema({
+                vol.Required(CONF_NAME, default="BACnet Device"): str,
+                vol.Required(CONF_HOST): str,
+                vol.Required("device_id", default=1): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=4194303)
+                ),
+            }),
+            errors=errors,
+        )
+        
     async def _async_test_snmp_connection(self, data: dict[str, Any]) -> None:
         """Test SNMP connection by reading sysDescr."""
         from .protocols.snmp import SNMPClient
