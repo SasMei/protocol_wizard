@@ -8,10 +8,12 @@ _LOGGER = logging.getLogger(__name__)
 class BACnetClient:
     """BACnet client for Protocol Wizard."""
     
-    def __init__(self, host: str, device_id: int):
+    def __init__(self, host: str, device_id: int, port: int=47808, network_number: int=0):
         """Initialize BACnet client."""
         self.host = host
         self.device_id = device_id
+        self.port = port
+        self.network_number = network_number
         self.bacnet = None
         
     async def connect(self) -> bool:
