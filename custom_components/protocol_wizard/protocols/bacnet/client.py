@@ -8,7 +8,6 @@ _LOGGER = logging.getLogger(__name__)
 
 try:
     import BAC0
-    from BAC0.core.devices.Device import Device
     HAS_BAC0 = True
 except ImportError:
     HAS_BAC0 = False
