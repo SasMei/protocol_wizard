@@ -19,6 +19,8 @@ from .protocols import ProtocolRegistry
 from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
 from .protocols.mqtt import MQTTClient
+from .protocols.bacnet.client import BACnetClient
+from .protocols.bacnet.coordinator import BACnetCoordinator
 from .template_utils import ensure_user_template_dirs, load_template
 
 from .const import (
@@ -45,6 +47,7 @@ from .const import (
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
     CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
     CONF_TEMPLATE,
     CONF_TEMPLATE_APPLIED,
@@ -141,6 +144,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
             client = _create_mqtt_client(config)
+        elif protocol_name == CONF_PROTOCOL_BACNET:
+            client = _create_bacnet_client(config)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
@@ -304,7 +309,15 @@ def _create_mqtt_client(config: dict) -> MQTTClient:
         password=config.get(CONF_PASSWORD) or None,
         timeout=10.0,
     )
-
+    
+def _create_bacnet_client(config: dict) -> BACnetClient:
+    """Create BACnetclient (no caching needed - connectionless)."""
+  
+    return BACnetClient(
+        host=config[CONF_HOST],
+        device_id=config["device_id"]
+    )
+    
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up protocol-agnostic services."""
     
