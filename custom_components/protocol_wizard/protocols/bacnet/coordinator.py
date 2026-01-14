@@ -3,13 +3,13 @@
 
 import logging
 from typing import Any
-
+from .. import ProtocolRegistry
 from ...protocols.base import BaseProtocolCoordinator
 from .const import CONF_ENTITIES, parse_bacnet_address, entity_key
 
 _LOGGER = logging.getLogger(__name__)
 
-
+@ProtocolRegistry.register("bacnet")
 class BACnetCoordinator(BaseProtocolCoordinator):
     """BACnet data coordinator for Protocol Wizard."""
 
