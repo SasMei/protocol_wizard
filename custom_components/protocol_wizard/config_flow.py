@@ -489,46 +489,230 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         
     async def async_step_bacnet_common(self, user_input=None):
-        """Configure BACnet connection."""
-        errors = {}
-        
+        """Choose BACnet connection method."""
         if user_input:
-            # Validate and create entry
-            try:
-                # Test connection
-                from .protocols.bacnet.client import BACnetClient
-                client = BACnetClient(
-                    user_input[CONF_HOST],
-                    user_input["device_id"]
-                )
-                if await client.connect():
-                    await client.disconnect()
-                    
-                    return self.async_create_entry(
-                        title=user_input[CONF_NAME],
-                        data={
-                            CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                            CONF_NAME: user_input[CONF_NAME],
-                            CONF_HOST: user_input[CONF_HOST],
-                            "device_id": user_input["device_id"],
-                        }
-                    )
-                else:
-                    errors["base"] = "cannot_connect"
-            except Exception:
-                errors["base"] = "unknown"
+            if user_input["method"] == "discover":
+                return await self.async_step_bacnet_discover()
+            else:
+                return await self.async_step_bacnet_manual()
         
         return self.async_show_form(
             step_id="bacnet_common",
             data_schema=vol.Schema({
+                vol.Required("method", default="manual"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "discover", "label": "Discover Devices (Recommended)"},
+                            {"value": "manual", "label": "Manual Entry"},
+                        ],
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+            }),
+            description_placeholders={
+                "info": "BACnet/IP device discovery uses Who-Is broadcast to find devices on your network."
+            }
+        )
+    
+    
+    async def async_step_bacnet_discover(self, user_input=None):
+        """Discover BACnet devices on the network."""
+        if user_input:
+            # User selected a device from discovery
+            device = user_input["device"]
+            
+            # Parse device string: "Device Name (192.168.1.100:47808, ID: 12345)"
+            # Extract host, port, device_id
+            import re
+            match = re.match(r".*\((.+?):(\d+), ID: (\d+)\)", device)
+            if match:
+                host = match.group(1)
+                port = int(match.group(2))
+                device_id = int(match.group(3))
+                
+                # Test connection
+                errors = {}
+                try:
+                    from .protocols.bacnet.client import BACnetClient
+                    client = BACnetClient(host, device_id, port)
+                    
+                    if await client.connect():
+                        device_name = await client.get_device_name()
+                        await client.disconnect()
+                        
+                        return self.async_create_entry(
+                            title=device_name or f"BACnet Device {device_id}",
+                            data={
+                                CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
+                                CONF_NAME: device_name or f"BACnet Device {device_id}",
+                                CONF_HOST: host,
+                                CONF_PORT: port,
+                                "device_id": device_id,
+                                "network_number": None,  # Local network
+                            }
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                except Exception as err:
+                    _LOGGER.error("BACnet connection test failed: %s", err)
+                    errors["base"] = "unknown"
+                
+                if errors:
+                    # Fall back to manual entry on error
+                    return await self.async_step_bacnet_manual(user_input=None, errors=errors)
+        
+        # Perform discovery
+        errors = {}
+        discovered_devices = []
+        
+        try:
+            from .protocols.bacnet.client import BACnetClient
+            
+            # Create temporary client for discovery
+            discovery_client = BACnetClient(
+                host="0.0.0.0",  # Listen on all interfaces
+                device_id=None,   # Discovery mode
+                port=47808
+            )
+            
+            # Run discovery (with timeout)
+            _LOGGER.info("Starting BACnet device discovery...")
+            discovered = await asyncio.wait_for(
+                discovery_client.discover_devices(timeout=10),
+                timeout=12
+            )
+            
+            if discovered:
+                # Format discovered devices for dropdown
+                for device in discovered:
+                    label = f"{device.get('name', 'Unknown')} ({device['address']}:{device['port']}, ID: {device['device_id']})"
+                    discovered_devices.append({
+                        "value": label,
+                        "label": label
+                    })
+                
+                _LOGGER.info("Discovered %d BACnet devices", len(discovered_devices))
+            else:
+                _LOGGER.warning("No BACnet devices discovered")
+                errors["base"] = "no_devices_found"
+        
+        except asyncio.TimeoutError:
+            _LOGGER.error("BACnet discovery timed out")
+            errors["base"] = "discovery_timeout"
+        except Exception as err:
+            _LOGGER.error("BACnet discovery failed: %s", err)
+            errors["base"] = "discovery_failed"
+        
+        # If no devices found or error, show option to go manual
+        if not discovered_devices or errors:
+            return self.async_show_form(
+                step_id="bacnet_discover",
+                data_schema=vol.Schema({
+                    vol.Required("retry", default=False): bool,
+                }),
+                errors=errors,
+                description_placeholders={
+                    "message": "No devices found. Enable retry or use manual entry."
+                }
+            )
+        
+        # Show discovered devices
+        return self.async_show_form(
+            step_id="bacnet_discover",
+            data_schema=vol.Schema({
+                vol.Required("device"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=discovered_devices,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
+            description_placeholders={
+                "count": str(len(discovered_devices))
+            }
+        )
+    
+    
+    async def async_step_bacnet_manual(self, user_input=None, errors=None):
+        """Manual BACnet/IP configuration."""
+        errors = errors or {}
+        
+        if user_input:
+            # Validate input
+            host = user_input[CONF_HOST].strip()
+            device_id = user_input["device_id"]
+            port = user_input.get(CONF_PORT, 47808)
+            network_number = user_input.get("network_number")
+            
+            if not host:
+                errors[CONF_HOST] = "required"
+            
+            if not errors:
+                # Test connection
+                try:
+                    from .protocols.bacnet.client import BACnetClient
+                    
+                    client = BACnetClient(host, device_id, port, network_number)
+                    
+                    if await client.connect():
+                        # Try to get device name from BACnet
+                        device_name = await client.get_device_name()
+                        await client.disconnect()
+                        
+                        # Use device name if available, otherwise use user input
+                        title = device_name or user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+                        
+                        return self.async_create_entry(
+                            title=title,
+                            data={
+                                CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
+                                CONF_NAME: title,
+                                CONF_HOST: host,
+                                CONF_PORT: port,
+                                "device_id": device_id,
+                                "network_number": network_number,
+                            }
+                        )
+                    else:
+                        errors["base"] = "cannot_connect"
+                
+                except ValueError as err:
+                    _LOGGER.error("Invalid input: %s", err)
+                    errors["base"] = "invalid_input"
+                except Exception as err:
+                    _LOGGER.error("BACnet connection test failed: %s", err)
+                    errors["base"] = "unknown"
+        
+        # Show manual entry form
+        return self.async_show_form(
+            step_id="bacnet_manual",
+            data_schema=vol.Schema({
                 vol.Required(CONF_NAME, default="BACnet Device"): str,
                 vol.Required(CONF_HOST): str,
-                vol.Required("device_id", default=1): vol.All(
-                    vol.Coerce(int), vol.Range(min=0, max=4194303)
+                vol.Required("device_id"): vol.All(
+                    vol.Coerce(int), 
+                    vol.Range(min=0, max=4194303)
+                ),
+                vol.Optional(CONF_PORT, default=47808): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=1, max=65535)
+                ),
+                vol.Optional("network_number"): vol.All(
+                    vol.Coerce(int),
+                    vol.Range(min=0, max=65535)
                 ),
             }),
             errors=errors,
+            description_placeholders={
+                "info": (
+                    "Enter BACnet/IP device details. "
+                    "Device ID is the BACnet device instance (0-4194303). "
+                    "Port is usually 47808. "
+                    "Network number is optional (leave empty for local network)."
+                )
+            }
         )
+
         
     async def _async_test_snmp_connection(self, data: dict[str, Any]) -> None:
         """Test SNMP connection by reading sysDescr."""
