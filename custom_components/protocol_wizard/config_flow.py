@@ -538,10 +538,9 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(host, device_id, port)
                     
                     if await client.connect():
-                        device_name = await client.get_device_name()
-                        title = device_name or user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+                        device_name = f"BACnet Device {device_id} ({host})"
                         return self.async_create_entry(
-                            title=title,
+                            title=device_name,
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
                                 CONF_NAME: device_name or f"BACnet Device {device_id}",
@@ -657,13 +656,10 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     
                     if await client.connect():
                         # Try to get device name from BACnet
-                        device_name = await client.get_device_name()
-                        
-                        # Use device name if available, otherwise use user input
-                        title = device_name or user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+                        device_name = f"BACnet Device {device_id} ({host})"
                         
                         return self.async_create_entry(
-                            title=title,
+                            title=device_name,
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
                                 CONF_NAME: title,
