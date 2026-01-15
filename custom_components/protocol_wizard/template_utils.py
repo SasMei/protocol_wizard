@@ -14,7 +14,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, CONF_PROTOCOL_MODBUS, CONF_PROTOCOL_SNMP , CONF_PROTOCOL_MQTT, CONF_PROTOCOL_BACNET,
+from .const import DOMAIN, CONF_PROTOCOL_MODBUS, CONF_PROTOCOL_SNMP , CONF_PROTOCOL_MQTT, CONF_PROTOCOL_BACNET
 
 _LOGGER = logging.getLogger(__name__)
 
