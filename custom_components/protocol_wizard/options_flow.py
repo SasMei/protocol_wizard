@@ -791,7 +791,14 @@ class BACnetSchemaHandler:
             return None
         
         # Parse options JSON if provided
-        opts_str = processed.get("options", "").strip()
+        opts = processed.get("options", "")
+        if isinstance(opts, dict):
+            # Handle dict for select entity (value: label)
+            opts_str = json.dumps(opts)  # or keep as dict if your schema_handler accepts it
+        elif isinstance(opts, str):
+            opts_str = opts.strip()
+        else:
+            opts_str = ""
         if opts_str:
             try:
                 opts = json.loads(opts_str)
