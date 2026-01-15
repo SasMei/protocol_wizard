@@ -493,9 +493,9 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Choose BACnet connection method."""
         if user_input:
             if user_input["method"] == "discover":
-                return await self.async_step_bacnet_discover()
+                return await self.async_step_bacnet_discover(user_input)
             else:
-                return await self.async_step_bacnet_manual()
+                return await self.async_step_bacnet_manual(user_input)
         
         return self.async_show_form(
             step_id="bacnet_common",
