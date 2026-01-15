@@ -500,7 +500,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="bacnet_common",
             data_schema=vol.Schema({
-                vol.Required(CONF_NAME, default="BACnet Hub"): str,                
                 vol.Required("method", default="manual"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
@@ -655,7 +654,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(host, device_id, port, network_number)
                     
                     if await client.connect():
-                        # Try to get device name from BACnet
                         title = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
                         return self.async_create_entry(
                             title=title,
