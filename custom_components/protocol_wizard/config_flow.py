@@ -539,9 +539,9 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     
                     if await client.connect():
                         device_name = await client.get_device_name()
-                        
+                        title = device_name or user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
                         return self.async_create_entry(
-                            title=device_name or f"BACnet Device {device_id}",
+                            title=title,
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
                                 CONF_NAME: device_name or f"BACnet Device {device_id}",
@@ -549,7 +549,8 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_PORT: port,
                                 "device_id": device_id,
                                 "network_number": None,  # Local network
-                            }
+                            },
+                            options={},
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -671,6 +672,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 "device_id": device_id,
                                 "network_number": network_number,
                             }
+                            options={},
                         )
                     else:
                         errors["base"] = "cannot_connect"
