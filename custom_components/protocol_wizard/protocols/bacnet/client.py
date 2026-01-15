@@ -41,16 +41,18 @@ async def _initialize_bacpypes3():
         _LOGGER.info("Initializing bacpypes3 Application")
         
         # Create a proper Namespace with required arguments
-        # Based on SimpleArgumentParser defaults
+        # CRITICAL: Specify the correct network address to use
+        # Use the actual HA IP address on the correct subnet
         args = Namespace(
             # Required
             name="Protocol Wizard Client",
             instance=random.randint(100000, 999999),
             vendoridentifier=999,
             
-            # Network - use None to auto-detect, or specific interface
-            # Using None lets bacpypes3 auto-detect the network interface
-            address=None,  # Let bacpypes3 auto-detect
+            # Network - SPECIFY THE CORRECT INTERFACE/ADDRESS
+            # This should be HA's IP on the correct subnet where devices are
+            # /22 means 192.168.0.0-192.168.3.255 (netmask 255.255.252.0)
+            address="192.168.1.99/22",  # ← Correct /22 subnet!
             network=0,
             
             # Optional
@@ -65,13 +67,24 @@ async def _initialize_bacpypes3():
             route_aware=None,
         )
         
-        _LOGGER.info("Calling Application.from_args() with instance=%s", args.instance)
+        _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s", 
+                    args.instance, args.address)
         
         # from_args is synchronous, not async!
         _global_app = Application.from_args(args)
         
         _LOGGER.info("BACnet application initialized successfully!")
         _LOGGER.info("Has elementService: %s", hasattr(_global_app, 'elementService'))
+        
+        # Log network configuration
+        if hasattr(_global_app, 'link_layers'):
+            _LOGGER.info("Link layers: %s", _global_app.link_layers)
+            for port_id, link_layer in _global_app.link_layers.items():
+                if hasattr(link_layer, 'address'):
+                    _LOGGER.info("  Link layer %s address: %s", port_id, link_layer.address)
+                if hasattr(link_layer, 'broadcast'):
+                    _LOGGER.info("  Link layer %s broadcast: %s", port_id, link_layer.broadcast)
+        
         _app_initialized = True
         
         return _global_app
@@ -168,21 +181,81 @@ class BACnetClient:
                 _LOGGER.error("Cannot discover without BACnet connection")
                 return []
             
+            # Log app info
+            _LOGGER.info("App local device ID: %s", 
+                        getattr(self.app, 'objectIdentifier', 'unknown'))
+            
+            # Check if we have link layers
+            if hasattr(self.app, 'link_layers'):
+                _LOGGER.info("Link layers: %s", self.app.link_layers)
+            
             # Send Who-Is
             _LOGGER.info("Sending Who-Is broadcast...")
+            _LOGGER.info("Target host: %s, device_id: %s", self.host, self.device_id)
             
             try:
-                await self.app.who_is()
+                # Check cache before Who-Is
+                if hasattr(self.app, 'device_info_cache'):
+                    cache_before = len(self.app.device_info_cache.instance_cache) if hasattr(self.app.device_info_cache, 'instance_cache') else 0
+                    _LOGGER.info("Cache has %d devices BEFORE Who-Is", cache_before)
+                
+                # Log what address we're using
+                if hasattr(self.app, 'link_layers'):
+                    for port_id, link_layer in self.app.link_layers.items():
+                        _LOGGER.info("Link layer %s:", port_id)
+                        if hasattr(link_layer, 'address'):
+                            _LOGGER.info("  Local address: %s", link_layer.address)
+                        if hasattr(link_layer, 'broadcast'):
+                            _LOGGER.info("  Broadcast address: %s", link_layer.broadcast)
+                        if hasattr(link_layer, 'addrBroadcastTuple'):
+                            _LOGGER.info("  Broadcast tuple: %s", link_layer.addrBroadcastTuple)
+                
+                # If we're looking for a specific device (not 0.0.0.0), try directed Who-Is first
+                if self.host != "0.0.0.0" and self.device_id:
+                    _LOGGER.info("Trying directed Who-Is to %s:%s for device %s", 
+                                self.host, self.port, self.device_id)
+                    # Send Who-Is directly to the device's IP
+                    target_address = Address(f"{self.host}:{self.port}")
+                    _LOGGER.info("Target address object: %s", target_address)
+                    
+                    await self.app.who_is(
+                        device_instance_range_low_limit=self.device_id,
+                        device_instance_range_high_limit=self.device_id,
+                        address=target_address
+                    )
+                    _LOGGER.info("Directed Who-Is sent to %s", target_address)
+                else:
+                    # Broadcast Who-Is
+                    _LOGGER.info("Sending broadcast Who-Is (no specific target)")
+                    await self.app.who_is()
+                    _LOGGER.info("Broadcast Who-Is sent")
+                
                 _LOGGER.info("Who-Is sent successfully")
+                
+                # Give a moment for immediate responses
+                await asyncio.sleep(0.5)
+                
+                # Check cache immediately after
+                if hasattr(self.app, 'device_info_cache'):
+                    cache_after = len(self.app.device_info_cache.instance_cache) if hasattr(self.app.device_info_cache, 'instance_cache') else 0
+                    _LOGGER.info("Cache has %d devices immediately after Who-Is", cache_after)
+                
             except Exception as err:
                 _LOGGER.error("Who-Is failed: %s", err)
                 import traceback
                 traceback.print_exc()
                 return []
             
-            # Wait for I-Am responses
+            # Wait for I-Am responses with periodic checks
             _LOGGER.info("Waiting %ds for I-Am responses...", timeout)
-            await asyncio.sleep(timeout)
+            
+            for i in range(timeout):
+                await asyncio.sleep(1)
+                
+                if hasattr(self.app, 'device_info_cache') and hasattr(self.app.device_info_cache, 'instance_cache'):
+                    cache_count = len(self.app.device_info_cache.instance_cache)
+                    if cache_count > 0:
+                        _LOGGER.info("After %ds: %d devices in cache", i+1, cache_count)
             
             # Collect discovered devices
             devices = self._collect_discovered_devices()
@@ -202,19 +275,71 @@ class BACnetClient:
         devices = []
         
         try:
-            # Check for device_info_cache (standard bacpypes3 location)
-            if hasattr(self.app, 'device_info_cache'):
+            _LOGGER.info("=" * 60)
+            _LOGGER.info("COLLECTING DISCOVERED DEVICES")
+            _LOGGER.info("=" * 60)
+            
+            # Check what attributes the app has
+            _LOGGER.info("App type: %s", type(self.app))
+            _LOGGER.info("App class: %s", self.app.__class__.__name__)
+            
+            # List all attributes
+            all_attrs = dir(self.app)
+            cache_attrs = [a for a in all_attrs if 'cache' in a.lower()]
+            device_attrs = [a for a in all_attrs if 'device' in a.lower()]
+            
+            _LOGGER.info("Cache-related attributes (%d): %s", len(cache_attrs), cache_attrs)
+            _LOGGER.info("Device-related attributes (%d): %s", len(device_attrs), device_attrs)
+            
+            # Check for device_info_cache
+            has_device_info_cache = hasattr(self.app, 'device_info_cache')
+            _LOGGER.info("Has device_info_cache: %s", has_device_info_cache)
+            
+            if has_device_info_cache:
                 cache = self.app.device_info_cache
-                _LOGGER.info("Found device_info_cache: %s", cache)
+                _LOGGER.info("device_info_cache type: %s", type(cache))
+                _LOGGER.info("device_info_cache class: %s", cache.__class__.__name__)
+                _LOGGER.info("device_info_cache attributes: %s", [a for a in dir(cache) if not a.startswith('_')])
                 
-                if hasattr(cache, 'instance_cache'):
-                    _LOGGER.info("Found instance_cache with %d devices", 
-                               len(cache.instance_cache))
+                # Check for instance_cache
+                has_instance_cache = hasattr(cache, 'instance_cache')
+                _LOGGER.info("Has instance_cache: %s", has_instance_cache)
+                
+                if has_instance_cache:
+                    instance_cache = cache.instance_cache
+                    _LOGGER.info("instance_cache type: %s", type(instance_cache))
+                    _LOGGER.info("instance_cache length: %d", len(instance_cache))
                     
-                    for device_id, device_info in cache.instance_cache.items():
+                    if len(instance_cache) == 0:
+                        _LOGGER.warning("!!! instance_cache is EMPTY - no devices found !!!")
+                        _LOGGER.info("This means either:")
+                        _LOGGER.info("  1. No I-Am responses were received")
+                        _LOGGER.info("  2. I-Am responses went to a different cache")
+                        _LOGGER.info("  3. Network/firewall is blocking responses")
+                    else:
+                        _LOGGER.info("!!! instance_cache has %d entries !!!", len(instance_cache))
+                    
+                    # Log all entries in detail
+                    for idx, (device_id, device_info) in enumerate(instance_cache.items()):
+                        _LOGGER.info("-" * 60)
+                        _LOGGER.info("Device %d/%d:", idx+1, len(instance_cache))
+                        _LOGGER.info("  device_id: %s (type: %s)", device_id, type(device_id))
+                        _LOGGER.info("  device_info type: %s", type(device_info))
+                        _LOGGER.info("  device_info class: %s", device_info.__class__.__name__)
+                        _LOGGER.info("  device_info attributes: %s", [a for a in dir(device_info) if not a.startswith('_')])
+                        
                         try:
-                            # Extract device information
+                            # Try to extract all possible attributes
+                            for attr_name in ['device_address', 'address', 'device_name', 'name', 
+                                            'objectName', 'vendor_name', 'vendorName', 'vendorIdentifier']:
+                                if hasattr(device_info, attr_name):
+                                    attr_value = getattr(device_info, attr_name)
+                                    _LOGGER.info("    %s: %s", attr_name, attr_value)
+                            
+                            # Extract device information for our list
                             address = getattr(device_info, 'device_address', None)
+                            _LOGGER.info("  Extracted address: %s", address)
+                            
                             if address:
                                 addr_str = str(address)
                                 if ':' in addr_str:
@@ -224,35 +349,59 @@ class BACnetClient:
                                     ip = addr_str
                                     port = 47808
                             else:
-                                ip = self.host
+                                ip = self.host if self.host != "0.0.0.0" else "127.0.0.1"
                                 port = self.port
                             
-                            name = getattr(device_info, 'device_name', f"Device {device_id}")
+                            name = getattr(device_info, 'device_name', None)
+                            if not name:
+                                name = getattr(device_info, 'objectName', f"Device {device_id}")
+                            
                             vendor = getattr(device_info, 'vendor_name', 'Unknown')
                             
-                            devices.append({
+                            device_dict = {
                                 'device_id': int(device_id),
                                 'address': ip,
                                 'port': port,
                                 'name': name,
                                 'vendor': vendor,
-                            })
+                            }
                             
-                            _LOGGER.info("Found device: %s (%s) at %s:%s", 
+                            devices.append(device_dict)
+                            
+                            _LOGGER.info("  ✓ Added device: %s (%s) at %s:%s", 
                                        name, device_id, ip, port)
                         
                         except Exception as err:
-                            _LOGGER.warning("Error parsing device %s: %s", device_id, err)
+                            _LOGGER.error("  ✗ Error parsing device %s: %s", device_id, err)
+                            import traceback
+                            traceback.print_exc()
+                else:
+                    _LOGGER.error("device_info_cache exists but has NO instance_cache!")
+                    # Try to access cache directly as dict
+                    if isinstance(cache, dict):
+                        _LOGGER.info("Cache is a dict with %d items", len(cache))
+                        for key, value in cache.items():
+                            _LOGGER.info("  Cache[%s] = %s (type: %s)", key, value, type(value))
             else:
-                _LOGGER.warning("No device_info_cache found")
-                # List cache-related attributes
-                attrs = [a for a in dir(self.app) if 'cache' in a.lower()]
-                _LOGGER.info("Cache attributes: %s", attrs)
+                _LOGGER.error("App has NO device_info_cache attribute!")
+                _LOGGER.info("Trying alternative cache locations...")
+                
+                # Try other possible cache locations
+                for attr_name in ['i_am_cache', 'iAmCache', 'devices', '_devices']:
+                    if hasattr(self.app, attr_name):
+                        alt_cache = getattr(self.app, attr_name)
+                        _LOGGER.info("Found %s: %s (type: %s)", attr_name, alt_cache, type(alt_cache))
+                        if isinstance(alt_cache, dict):
+                            _LOGGER.info("  Has %d items", len(alt_cache))
         
         except Exception as err:
-            _LOGGER.error("Error collecting devices: %s", err)
+            _LOGGER.error("CRITICAL ERROR in _collect_discovered_devices: %s", err)
             import traceback
             traceback.print_exc()
+        
+        _LOGGER.info("=" * 60)
+        _LOGGER.info("COLLECTION COMPLETE: Found %d devices", len(devices))
+        _LOGGER.info("=" * 60)
         
         return devices
     
@@ -289,14 +438,27 @@ class BACnetClient:
             _LOGGER.debug("Reading %s from %s at %s", 
                          property_name, object_id, device_address)
             
-            result = await self.app.read_property(
-                address=device_address,
-                objid=object_id,
-                prop=prop_id
-            )
-            
-            _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
-            return result
+            # Add timeout to prevent hanging forever
+            try:
+                result = await asyncio.wait_for(
+                    self.app.read_property(
+                        address=device_address,
+                        objid=object_id,
+                        prop=prop_id
+                    ),
+                    timeout=5.0  # 5 second timeout
+                )
+                
+                _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
+                return result
+                
+            except asyncio.TimeoutError:
+                _LOGGER.error("Read timed out after 5 seconds - no response from %s", device_address)
+                _LOGGER.error("This means:")
+                _LOGGER.error("  1. Device is not responding")
+                _LOGGER.error("  2. Network/firewall is blocking BACnet traffic")
+                _LOGGER.error("  3. Device is on different subnet")
+                return None
         
         except Exception as err:
             _LOGGER.error("Read failed for %s:%s.%s: %s", 
