@@ -144,7 +144,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         elif protocol_name == CONF_PROTOCOL_MQTT:
             client = _create_mqtt_client(config)
         elif protocol_name == CONF_PROTOCOL_BACNET:
-            client = _create_bacnet_client(config)
+            client = _create_bacnet_client(config, hass)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
@@ -310,10 +310,11 @@ def _create_mqtt_client(config: dict) -> MQTTClient:
         timeout=10.0,
     )
     
-def _create_bacnet_client(config: dict) -> BACnetClient:
+def _create_bacnet_client(config: dict, hass: HomeAssistant) -> BACnetClient:
     """Create BACnet client (no caching needed - connectionless)."""
     return BACnetClient(
         host=config[CONF_HOST],
+        hass = hass
         device_id=config["device_id"],
         port=config.get(CONF_PORT, 47808),
         network_number=config.get("network_number")
