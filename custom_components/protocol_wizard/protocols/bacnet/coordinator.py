@@ -33,6 +33,7 @@ class BACnetCoordinator(BaseProtocolCoordinator):
             name="BACnet Monitor",
         )
         self.protocol_name = CONF_PROTOCOL_BACNET
+        self._lock = asyncio.Lock()
     
     async def async_read_entity(self, entity: dict) -> Any:
         """
