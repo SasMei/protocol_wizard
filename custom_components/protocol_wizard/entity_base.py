@@ -22,6 +22,9 @@ from .const import (
     CONF_ENTITIES,
     CONF_REGISTERS,
     CONF_PROTOCOL_MODBUS,
+#    CONF_PROTOCOL_SNMP,
+    CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
 )
 from .protocols.base import BaseProtocolCoordinator
@@ -496,45 +499,76 @@ class ProtocolWizardSelectBase(CoordinatorEntity, SelectEntity):
         """Write selected option to protocol."""
         value = self._reverse_map.get(option)
         if value is None:
+            _LOGGER.warning("No reverse mapping for option: %s", option)
             return
-        
+    
         if self._config.get("rw") not in ("write", "rw"):
             _LOGGER.warning(
                 "Blocked write to read-only entity %s",
                 self._config.get("name"),
             )
             return
-        
+    
         # Protocol-specific value conversion
         protocol = self.coordinator.protocol_name
-        
-        if protocol == "mqtt":
-            # MQTT: Send value as-is (string payload)
-            # Don't convert to numeric!
-            pass  # value stays as string
-        else:
-            # Modbus/SNMP: Convert to numeric
-            register_type = self._config.get("register_type", "holding").lower()
-            
-            # For coils/discrete (bit types), convert to boolean
-            if register_type in ("coil", "discrete"):
-                value = bool(int(float(value)))  # "0" → False, "1" → True
-            elif "float" not in self.data_type:
-                value = int(round(float(value)))  # Regular registers
+    
+        try:
+            if protocol == CONF_PROTOCOL_MQTT:
+                # MQTT: Keep as string (payload)
+                value = str(value)  # Ensure it's a string
+    
+            elif protocol == CONF_PROTOCOL_MODBUS:
+                # Modbus: Convert to numeric (int/float)
+                register_type = self._config.get("register_type", "holding").lower()
+    
+                if register_type in ("coil", "discrete"):
+                    value = bool(int(float(value)))  # "0" → False, "1" → True
+                elif "float" in self._config.get("data_type", ""):
+                    value = float(value)
+                else:
+                    value = int(round(float(value)))  # Regular registers
+    
+            elif protocol == CONF_PROTOCOL_BACNET:
+                # BACnet: Keep strings for binary/multiState, convert index for enum
+                data_type = self._config.get("data_type", "")
+                if data_type == "enum":
+                    # If value is string label, convert to numeric index (e.g. "Heat" → 2)
+                    if isinstance(value, str) and value in self._config.get("options", {}).values():
+                        for key, label in self._config["options"].items():
+                            if label == value:
+                                value = int(key)
+                                break
+                elif data_type == "boolean":
+                    # Map to "active"/"inactive"
+                    value = "active" if value in (True, "On", "active") else "inactive"
+    
+                # No float conversion for BACnet strings/enums
+    
             else:
-                value = float(value)  # Float registers
-        
-        # Use coordinator's write method
-        success = await self.coordinator.async_write_entity(
-            address=str(self._config["address"]),
-            value=value,
-            entity_config=self._config,
-        )
-        
-        if success:
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to write value to %s", self._config.get("name"))
+                # Other protocols: try numeric conversion as fallback
+                try:
+                    value = float(value)
+                except (ValueError, TypeError):
+                    value = str(value)
+    
+            _LOGGER.debug("Writing value: %s (type: %s)", value, type(value))
+    
+            # Use coordinator's write method
+            success = await self.coordinator.async_write_entity(
+                address=str(self._config["address"]),
+                value=value,
+                entity_config=self._config,
+            )
+    
+            if success:
+                await self.coordinator.async_request_refresh()
+            else:
+                _LOGGER.error("Failed to write value to %s", self._config.get("name"))
+    
+        except Exception as err:
+            _LOGGER.error("Error in async_select_option: %s", err)
+            import traceback
+            traceback.print_exc()
 
 class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
     """Hub status entity - shows connection state."""
