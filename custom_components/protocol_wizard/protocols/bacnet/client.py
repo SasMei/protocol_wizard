@@ -37,8 +37,22 @@ async def _initialize_bacpypes3():
     try:
         from argparse import Namespace
         import random
-        
-        _LOGGER.info("Initializing bacpypes3 Application")
+        from homeassistant.components.network import get_network_interfaces
+
+        # Get all network interfaces
+        interfaces = await self.hass.async_add_executor_job(get_network_interfaces)
+
+        # Find the first active IPv4 interface (usually eth0 or wlan0)
+        local_ip = None
+        for iface in interfaces:
+            if iface.ipv4 and iface.ipv4.address:
+                local_ip = iface.ipv4.address
+                _LOGGER.info("Found active IPv4 interface: %s (%s)", iface.name, local_ip)
+                break
+
+        if not local_ip:
+            _LOGGER.warning("No active IPv4 interface found - falling back to 0.0.0.0 (listen all)")
+            local_ip = "0.0.0.0"  # Listen on all interfaces (broadcast works) 
         
         # Create a proper Namespace with required arguments
         # CRITICAL: Specify the correct network address to use
@@ -52,7 +66,7 @@ async def _initialize_bacpypes3():
             # Network - SPECIFY THE CORRECT INTERFACE/ADDRESS
             # This should be HA's IP on the correct subnet where devices are
             # /22 means 192.168.0.0-192.168.3.255 (netmask 255.255.252.0)
-            address="192.168.1.99/22",  # ← Correct /22 subnet!
+            address=f"{local_ip}/24",
             network=0,
             
             # Optional
