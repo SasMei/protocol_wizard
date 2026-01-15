@@ -119,7 +119,7 @@ class BACnetClient:
     
     def __init__(
         self, 
-        hass: HomeAssistant
+        hass: HomeAssistant,
         host: str, 
         device_id: Optional[int] = None,
         port: int = 47808,
