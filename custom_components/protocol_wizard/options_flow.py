@@ -691,7 +691,7 @@ class BACnetSchemaHandler:
                 vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
             
             # Home Assistant metadata
-            vol.Optional("device_class", default=defaults.get("device_class", "")):
+            vol.Optional("device_class", default=defaults.get("device_class", " ")):
                 selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
@@ -715,7 +715,7 @@ class BACnetSchemaHandler:
                     )
                 ),
             
-            vol.Optional("state_class", default=defaults.get("state_class", "")):
+            vol.Optional("state_class", default=defaults.get("state_class", " ")):
                 selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[" ", "measurement", "total", "total_increasing"],
@@ -723,7 +723,7 @@ class BACnetSchemaHandler:
                     )
                 ),
             
-            vol.Optional("entity_category", default=defaults.get("entity_category", "")):
+            vol.Optional("entity_category", default=defaults.get("entity_category", " ")):
                 selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[" ", "diagnostic", "config"],
@@ -847,9 +847,9 @@ class BACnetSchemaHandler:
                 defaults["object_type_helper"] = parts[0]
         
         # Set empty string for optional fields
-        defaults.setdefault("device_class", "")
-        defaults.setdefault("state_class", "")
-        defaults.setdefault("entity_category", "")
+        defaults.setdefault("device_class", " ")
+        defaults.setdefault("state_class", " ")
+        defaults.setdefault("entity_category", " ")
         defaults.setdefault("icon", "")
         defaults.setdefault("unit", "")
         defaults.setdefault("format", "")
