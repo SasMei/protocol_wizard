@@ -39,24 +39,24 @@ class BACnetCoordinator(BaseProtocolCoordinator):
     async def async_read_entity(
         self,
         address: str,
-        entity: dict,
+        entity_config: dict,
         **kwargs,
     ) -> Any | None:
         """
         Read a single entity value (required by base class).
         
         Args:
-            entity: Entity configuration dict
+            entity_config: Entity configuration dict
             
         Returns:
-            The entity value or None if read failed
+            The entity_config value or None if read failed
         """
         try:
             # Parse BACnet address: "analogInput:0:presentValue"
             if not address:
-                address = entity.get("address")
+                address = entity_config.get("address")
             if not address:
-                _LOGGER.warning("Entity %s has no address", entity.get("name"))
+                _LOGGER.warning("Entity %s has no address", entity_config.get("name"))
                 return None
             
             object_type, instance, property_name = parse_bacnet_address(address)
@@ -72,20 +72,20 @@ class BACnetCoordinator(BaseProtocolCoordinator):
                 _LOGGER.debug(
                     "Failed to read %s for entity %s",
                     address,
-                    entity.get("name")
+                    entity_config.get("name")
                 )
                 return None
             
             # Decode and format value
-            decoded = self._decode_value(result, entity)
-            formatted = self._format_value(decoded, entity)
+            decoded = self._decode_value(result, entity_config)
+            formatted = self._format_value(decoded, entity_config)
             
             return formatted
             
         except ValueError as err:
             _LOGGER.error(
                 "Invalid address format for entity %s: %s",
-                entity.get("name"),
+                entity_config.get("name"),
                 err
             )
             return None
@@ -93,7 +93,7 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         except Exception as err:
             _LOGGER.error(
                 "Error reading entity %s: %s",
-                entity.get("name"),
+                entity_config.get("name"),
                 err
             )
             return None
@@ -103,14 +103,14 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         self,
         address: str,
         value: Any,
-        entity: dict,
+        entity_config: dict,
         **kwargs,
     ) -> bool:
         """
         Write a value to an entity (required by base class).
         
         Args:
-            entity: Entity configuration dict
+            entity_config: Entity configuration dict
             value: Value to write
             
         Returns:
@@ -119,14 +119,14 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         try:
             # Parse address
             if not address:
-                address = entity.get("address")
+                address = entity_config.get("address")
             object_type, instance, property_name = parse_bacnet_address(address)
             
             # Encode value (reverse scale/offset, type conversion)
-            write_value = self._encode_value(value, entity)
+            write_value = self._encode_value(value, entity_config)
             
             # Write to BACnet device (default priority 8)
-            priority = entity.get("priority", 8)
+            priority = entity_config.get("priority", 8)
             success = await self.client.write_property(
                 object_type,
                 instance,
@@ -139,20 +139,20 @@ class BACnetCoordinator(BaseProtocolCoordinator):
                 _LOGGER.info(
                     "Wrote %s to %s (priority %d)",
                     write_value,
-                    entity.get("name"),
+                    entity_config.get("name"),
                     priority
                 )
             else:
-                _LOGGER.error("Write failed for %s", entity.get("name"))
+                _LOGGER.error("Write failed for %s", entity_config.get("name"))
             
             return success
         
         except ValueError as err:
-            _LOGGER.error("Invalid address for entity %s: %s", entity.get("name"), err)
+            _LOGGER.error("Invalid address for entity %s: %s", entity_config.get("name"), err)
             return False
         
         except Exception as err:
-            _LOGGER.error("Write error for entity %s: %s", entity.get("name"), err)
+            _LOGGER.error("Write error for entity %s: %s", entity_config.get("name"), err)
             return False
     
     
