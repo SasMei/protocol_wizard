@@ -4,18 +4,18 @@
 import logging
 import asyncio
 from typing import Any, Optional
-import sys
+#import sys
 
 _LOGGER = logging.getLogger(__name__)
 
 try:
-    from bacpypes3.settings import settings
+#    from bacpypes3.settings import settings
     from bacpypes3.app import Application
-    from bacpypes3.local.device import DeviceObject
+#    from bacpypes3.local.device import DeviceObject
     from bacpypes3.primitivedata import ObjectIdentifier
     from bacpypes3.basetypes import PropertyIdentifier
     from bacpypes3.pdu import Address
-    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
+#    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
     HAS_BACPYPES3 = True
 except ImportError:
     HAS_BACPYPES3 = False
@@ -497,8 +497,8 @@ class BACnetClient:
                 priority=priority
             )
             
-            _LOGGER.info("Wrote %s to %s:%s.%s", 
-                         value, object_type, object_instance, property_name)
+            _LOGGER.info("Wrote %s to %s:%s.%s. Result:%s", 
+                         value, object_type, object_instance, property_name,result)
             return True
         
         except Exception as err:
