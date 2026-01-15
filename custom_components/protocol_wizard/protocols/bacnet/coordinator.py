@@ -53,7 +53,7 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         """
         try:
             # Parse BACnet address: "analogInput:0:presentValue"
-            if not address
+            if not address:
                 address = entity.get("address")
             if not address:
                 _LOGGER.warning("Entity %s has no address", entity.get("name"))
@@ -118,7 +118,7 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         """
         try:
             # Parse address
-            if not address
+            if not address:
                 address = entity.get("address")
             object_type, instance, property_name = parse_bacnet_address(address)
             
