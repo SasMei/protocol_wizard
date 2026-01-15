@@ -520,3 +520,8 @@ class BACnetClient:
     def connected(self) -> bool:
         """Return connection status."""
         return self._connected
+    
+    @property
+    def is_connected(self) -> bool:
+        """Alias for connected property (for compatibility)."""
+        return self._connected
