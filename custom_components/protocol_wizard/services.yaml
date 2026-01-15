@@ -578,25 +578,67 @@ write_mqtt:
         boolean:
 read_bacnet:
   name: Read BACnet Property
-  description: Read a property from a BACnet object.
+  description: Read a property from a BACnet device
   fields:
-    address:
-      description: BACnet object address in format "objectType:instance:property"
-      example: "analogInput:0:presentValue"
-    data_type: float/integer/boolean/string/enumerated
-    scale: scaling factor
-    offset: offset value
-    raw: raw mode toggle
+    device_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    object_type:
+      required: true
+      selector:
+        select:
+          options:
+            - analogInput
+            - analogValue
+            - binaryInput
+            - binaryValue
+            - multiStateValue
+    object_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    property:
+      required: true
+      selector:
+        select:
+          options:
+            - presentValue
+            - units
+            - objectName
+            - description
 write_bacnet:
   name: Write BACnet Property
-  description: Write a value to a BACnet object property.
+  description: Write a property on a BACnet device
   fields:
-    address:
-      example: "analogOutput:0:presentValue"
-    value: value to write
-    data_type: float/integer/boolean/string
-    priority: write priority (1-16, default 8)
-    scale: reverse scaling
+    device_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    object_type:
+      required: true
+      selector:
+        select:
+          options:
+            - analogValue
+            - binaryValue
+            - multiStateValue
+    object_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    value:
+      required: true
+      selector:
+        text:
     offset: reverse offset
 discover_bacnet:
   name: Discover BACnet Devices
