@@ -314,7 +314,7 @@ def _create_bacnet_client(config: dict, hass: HomeAssistant) -> BACnetClient:
     """Create BACnet client (no caching needed - connectionless)."""
     return BACnetClient(
         host=config[CONF_HOST],
-        hass = hass
+        hass = hass,
         device_id=config["device_id"],
         port=config.get(CONF_PORT, 47808),
         network_number=config.get("network_number")
