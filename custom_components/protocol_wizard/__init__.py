@@ -628,6 +628,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         coordinator = _get_coordinator(call)
         
         address = call.data.get("address")
+        device_instance = call.data.get("device_instance")
         if not address:
             raise HomeAssistantError("address is required")
         
@@ -635,6 +636,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "address": address,
             "data_type": call.data.get("data_type", "float"),
             "device_id": call.data.get("device_id", None),
+            "device_instance" : device_instance
         }
         
         value = await coordinator.async_read_entity(
@@ -653,6 +655,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         
         address = call.data.get("address")
         value = call.data.get("value")
+        device_instance = call.data.get("device_instance")
         
         if not address:
             raise HomeAssistantError("address is required")
@@ -664,6 +667,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "data_type": call.data.get("data_type", "float"),
             "device_id": call.data.get("device_id", None),
             "priority": call.data.get("priority", 8),  # BACnet write priority
+            "device_instance" : device_instance
         }
         
         _LOGGER.debug(
