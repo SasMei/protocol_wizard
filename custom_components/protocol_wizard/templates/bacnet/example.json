@@ -4,7 +4,7 @@
       "address": "analogInput:0:presentValue",
       "data_type": "float",
       "rw": "read",
-      "unit": "°C",
+      "unit": "C",
       "device_class": "temperature",
       "state_class": "measurement",
       "scale": 1.0,
