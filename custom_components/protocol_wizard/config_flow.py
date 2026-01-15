@@ -500,6 +500,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="bacnet_common",
             data_schema=vol.Schema({
+                vol.Required(CONF_NAME, default="BACnet Hub"): str,                
                 vol.Required("method", default="manual"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
