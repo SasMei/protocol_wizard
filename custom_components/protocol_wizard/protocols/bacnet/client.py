@@ -4,6 +4,7 @@
 import logging
 import asyncio
 from typing import Any, Optional
+from homeassistant.core import HomeAssistant
 #import sys
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,7 +28,7 @@ _global_app = None
 _app_initialized = False
 
 
-async def _initialize_bacpypes3(self):
+async def _initialize_bacpypes3(hass: HomeAssistant):
     """Initialize bacpypes3 properly using from_args pattern."""
     global _global_app, _app_initialized
     
@@ -37,23 +38,14 @@ async def _initialize_bacpypes3(self):
     try:
         from argparse import Namespace
         import random
-        from homeassistant.components.network import get_network_interfaces
+        from homeassistant.components import network
 
-        # Get all network interfaces
-        interfaces = await self.hass.async_add_executor_job(get_network_interfaces)
 
-        # Find the first active IPv4 interface (usually eth0 or wlan0)
-        local_ip = None
-        for iface in interfaces:
-            if iface.ipv4 and iface.ipv4.address:
-                local_ip = iface.ipv4.address
-                _LOGGER.info("Found active IPv4 interface: %s (%s)", iface.name, local_ip)
-                break
-
-        if not local_ip:
-            _LOGGER.warning("No active IPv4 interface found - falling back to 0.0.0.0 (listen all)")
-            local_ip = "0.0.0.0"  # Listen on all interfaces (broadcast works) 
-        
+        try:
+            source_ip = await network.async_get_source_ip(hass)
+            return source_ip
+        except Exception:
+            return "0.0.0.0" # Fallback
         # Create a proper Namespace with required arguments
         # CRITICAL: Specify the correct network address to use
         # Use the actual HA IP address on the correct subnet
@@ -127,6 +119,7 @@ class BACnetClient:
     
     def __init__(
         self, 
+        hass: HomeAssistant
         host: str, 
         device_id: Optional[int] = None,
         port: int = 47808,
@@ -142,6 +135,7 @@ class BACnetClient:
         self.network_number = network_number
         self.app: Optional[Application] = None
         self._connected = False
+        self.hass = hass
     
     
     async def connect(self) -> bool:
@@ -150,7 +144,7 @@ class BACnetClient:
             _LOGGER.info("Connecting to BACnet network")
             
             # Initialize bacpypes3 using from_args
-            await _initialize_bacpypes3(self)
+            await _initialize_bacpypes3(self.hass)
             
             # Get global app
             global _global_app
