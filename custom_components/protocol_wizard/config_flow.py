@@ -533,7 +533,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 
                 # Test connection
                 errors = {}
-                options = {}
                 try:
                     from .protocols.bacnet.client import BACnetClient
                     client = BACnetClient(host, device_id, port)
@@ -550,7 +549,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_PORT: port,
                                 "device_id": device_id,
                                 "network_number": None,  # Local network
-                                options=options,
                             }
                         )
                     else:
@@ -638,7 +636,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_bacnet_manual(self, user_input=None, errors=None):
         """Manual BACnet/IP configuration."""
         errors = errors or {}
-        options = {}
         
         if user_input:
             # Validate input
@@ -673,7 +670,6 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_PORT: port,
                                 "device_id": device_id,
                                 "network_number": network_number,
-                                options = options,
                             }
                         )
                     else:
