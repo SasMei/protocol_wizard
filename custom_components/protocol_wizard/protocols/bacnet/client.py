@@ -27,7 +27,7 @@ _global_app = None
 _app_initialized = False
 
 
-async def _initialize_bacpypes3():
+async def _initialize_bacpypes3(self):
     """Initialize bacpypes3 properly using from_args pattern."""
     global _global_app, _app_initialized
     
@@ -150,7 +150,7 @@ class BACnetClient:
             _LOGGER.info("Connecting to BACnet network")
             
             # Initialize bacpypes3 using from_args
-            await _initialize_bacpypes3()
+            await _initialize_bacpypes3(self)
             
             # Get global app
             global _global_app
