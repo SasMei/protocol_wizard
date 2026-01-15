@@ -671,7 +671,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_PORT: port,
                                 "device_id": device_id,
                                 "network_number": network_number,
-                            }
+                            },
                             options={},
                         )
                     else:
