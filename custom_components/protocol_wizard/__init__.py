@@ -622,7 +622,65 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to publish to MQTT topic {topic}")
         
         return {"success": True}
+        
+    async def handle_read_bacnet(call: ServiceCall):
+        """BACnet read service."""
+        coordinator = _get_coordinator(call)
+        
+        address = call.data.get("address")
+        if not address:
+            raise HomeAssistantError("address is required")
+        
+        entity_config = {
+            "address": address,
+            "data_type": call.data.get("data_type", "float"),
+            "device_id": call.data.get("device_id", None),
+        }
+        
+        value = await coordinator.async_read_entity(
+            address=address,
+            entity_config=entity_config,
+        )
+        
+        if value is None:
+            raise HomeAssistantError(f"Failed to read BACnet address {address}")
+        
+        return {"value": value}
     
+    async def handle_write_bacnet(call: ServiceCall):
+        """BACnet write service."""
+        coordinator = _get_coordinator(call)
+        
+        address = call.data.get("address")
+        value = call.data.get("value")
+        
+        if not address:
+            raise HomeAssistantError("address is required")
+        if value is None:
+            raise HomeAssistantError("value is required")
+        
+        entity_config = {
+            "address": address,
+            "data_type": call.data.get("data_type", "float"),
+            "device_id": call.data.get("device_id", None),
+            "priority": call.data.get("priority", 8),  # BACnet write priority
+        }
+        
+        _LOGGER.debug(
+            "write_bacnet service: address=%s, value=%r, priority=%s",
+            address, value, entity_config.get("priority")
+        )
+        
+        success = await coordinator.async_write_entity(
+            address=address,
+            value=value,
+            entity_config=entity_config,
+        )
+        
+        if not success:
+            raise HomeAssistantError(f"Failed to write to BACnet address {address}")
+        
+        return {"success": True}    
     hass.services.async_register(DOMAIN, "write_register", handle_write_register)
     hass.services.async_register(
         DOMAIN,
@@ -653,7 +711,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         "write_mqtt",
         handle_write_mqtt,
     )
-
+    hass.services.async_register(
+        DOMAIN,
+        "read_bacnet",
+        handle_read_bacnet,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "write_bacnet",
+        handle_write_bacnet,
+    )
+    
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     
