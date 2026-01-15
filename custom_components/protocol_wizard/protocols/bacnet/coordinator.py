@@ -5,17 +5,31 @@ import logging
 from typing import Any
 from .. import ProtocolRegistry
 from ...protocols.base import BaseProtocolCoordinator
-from .const import CONF_ENTITIES, parse_bacnet_address, entity_key
-
+from .const import parse_bacnet_address, entity_key
+from .client import BACnetClient
+from ...const import CONF_ENTITIES, CONF_PROTOCOL_BACNET
 _LOGGER = logging.getLogger(__name__)
 
-@ProtocolRegistry.register("bacnet")
+@ProtocolRegistry.register(CONF_PROTOCOL_BACNET)
 class BACnetCoordinator(BaseProtocolCoordinator):
     """BACnet data coordinator for Protocol Wizard."""
 
-    # ----------------------------------------------------------------
-    # BaseProtocolCoordinator Abstract Methods (REQUIRED)
-    # ----------------------------------------------------------------
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: BACnetClient,
+        config_entry: ConfigEntry,
+        update_interval: timedelta,
+    ):
+        """Initialize BACnet coordinator."""
+        super().__init__(
+            hass=hass,
+            client=client,
+            config_entry=config_entry,
+            update_interval=update_interval,
+            name="BACnet Monitor",
+        )
+        self.protocol_name = CONF_PROTOCOL_BACNET
     
     async def async_read_entity(self, entity: dict) -> Any:
         """
