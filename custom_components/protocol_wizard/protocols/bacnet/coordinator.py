@@ -36,7 +36,12 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         self.protocol_name = CONF_PROTOCOL_BACNET
         self._lock = asyncio.Lock()
     
-    async def async_read_entity(self, entity: dict) -> Any:
+    async def async_read_entity(
+        self,
+        address: str,
+        entity: dict,
+        **kwargs,
+    ) -> Any | None:
         """
         Read a single entity value (required by base class).
         
@@ -48,7 +53,8 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         """
         try:
             # Parse BACnet address: "analogInput:0:presentValue"
-            address = entity.get("address")
+            if not address
+                address = entity.get("address")
             if not address:
                 _LOGGER.warning("Entity %s has no address", entity.get("name"))
                 return None
@@ -93,7 +99,13 @@ class BACnetCoordinator(BaseProtocolCoordinator):
             return None
     
     
-    async def async_write_entity(self, entity: dict, value: Any) -> bool:
+    async def async_write_entity(
+        self,
+        address: str,
+        value: Any,
+        entity: dict,
+        **kwargs,
+    ) -> bool:
         """
         Write a value to an entity (required by base class).
         
@@ -106,7 +118,8 @@ class BACnetCoordinator(BaseProtocolCoordinator):
         """
         try:
             # Parse address
-            address = entity.get("address")
+            if not address
+                address = entity.get("address")
             object_type, instance, property_name = parse_bacnet_address(address)
             
             # Encode value (reverse scale/offset, type conversion)
