@@ -14,6 +14,166 @@ class BACnetCoordinator(BaseProtocolCoordinator):
     """BACnet data coordinator for Protocol Wizard."""
 
     # ----------------------------------------------------------------
+    # BaseProtocolCoordinator Abstract Methods (REQUIRED)
+    # ----------------------------------------------------------------
+    
+    async def async_read_entity(self, entity: dict) -> Any:
+        """
+        Read a single entity value (required by base class).
+        
+        Args:
+            entity: Entity configuration dict
+            
+        Returns:
+            The entity value or None if read failed
+        """
+        try:
+            # Parse BACnet address: "analogInput:0:presentValue"
+            address = entity.get("address")
+            if not address:
+                _LOGGER.warning("Entity %s has no address", entity.get("name"))
+                return None
+            
+            object_type, instance, property_name = parse_bacnet_address(address)
+            
+            # Read property value
+            result = await self.client.read_property(
+                object_type,
+                instance,
+                property_name
+            )
+            
+            if result is None:
+                _LOGGER.debug(
+                    "Failed to read %s for entity %s",
+                    address,
+                    entity.get("name")
+                )
+                return None
+            
+            # Decode and format value
+            decoded = self._decode_value(result, entity)
+            formatted = self._format_value(decoded, entity)
+            
+            return formatted
+            
+        except ValueError as err:
+            _LOGGER.error(
+                "Invalid address format for entity %s: %s",
+                entity.get("name"),
+                err
+            )
+            return None
+            
+        except Exception as err:
+            _LOGGER.error(
+                "Error reading entity %s: %s",
+                entity.get("name"),
+                err
+            )
+            return None
+    
+    
+    async def async_write_entity(self, entity: dict, value: Any) -> bool:
+        """
+        Write a value to an entity (required by base class).
+        
+        Args:
+            entity: Entity configuration dict
+            value: Value to write
+            
+        Returns:
+            True if write successful, False otherwise
+        """
+        try:
+            # Parse address
+            address = entity.get("address")
+            object_type, instance, property_name = parse_bacnet_address(address)
+            
+            # Encode value (reverse scale/offset, type conversion)
+            write_value = self._encode_value(value, entity)
+            
+            # Write to BACnet device (default priority 8)
+            priority = entity.get("priority", 8)
+            success = await self.client.write_property(
+                object_type,
+                instance,
+                property_name,
+                write_value,
+                priority
+            )
+            
+            if success:
+                _LOGGER.info(
+                    "Wrote %s to %s (priority %d)",
+                    write_value,
+                    entity.get("name"),
+                    priority
+                )
+            else:
+                _LOGGER.error("Write failed for %s", entity.get("name"))
+            
+            return success
+        
+        except ValueError as err:
+            _LOGGER.error("Invalid address for entity %s: %s", entity.get("name"), err)
+            return False
+        
+        except Exception as err:
+            _LOGGER.error("Write error for entity %s: %s", entity.get("name"), err)
+            return False
+    
+    
+    def _encode_value(self, value: Any, entity_config: dict) -> Any:
+        """
+        Encode value for BACnet write (reverse of _decode_value).
+        
+        Args:
+            value: Value from Home Assistant
+            entity_config: Entity configuration dict
+        
+        Returns:
+            Encoded value ready for BACnet write
+        """
+        write_value = value
+        data_type = entity_config.get("data_type", "float")
+        
+        # Reverse scale/offset for numeric values
+        if isinstance(value, (int, float)) and data_type != "boolean":
+            offset = float(entity_config.get("offset", 0.0))
+            scale = float(entity_config.get("scale", 1.0))
+            
+            # Reverse: (value - offset) / scale
+            if offset != 0.0:
+                write_value = write_value - offset
+            if scale != 1.0 and scale != 0:
+                write_value = write_value / scale
+        
+        # Type conversion based on data_type
+        try:
+            if data_type == "integer":
+                write_value = int(write_value)
+            elif data_type == "float":
+                write_value = float(write_value)
+            elif data_type == "boolean":
+                write_value = bool(write_value)
+            elif data_type == "string":
+                write_value = str(write_value)
+            elif data_type in ("enumerated", "unsigned"):
+                write_value = int(write_value)
+        except (ValueError, TypeError) as err:
+            _LOGGER.warning(
+                "Type conversion failed for %s (type: %s): %s",
+                entity_config.get("name"),
+                data_type,
+                err
+            )
+            return value  # Return original if conversion fails
+        
+        return write_value
+    
+    
+    # ----------------------------------------------------------------
     # BaseProtocolCoordinator Implementation
     # ----------------------------------------------------------------
     
