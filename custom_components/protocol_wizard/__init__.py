@@ -177,13 +177,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     
     hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
-    
+#    devicename = entry.data.get(CONF_NAME, f"{protocol_name.title()} Device")
+    devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
     # CREATE DEVICE REGISTRY ENTRY
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.data.get(CONF_NAME, f"{protocol_name.title()} Device"),
+        name=devicename,
         manufacturer=protocol_name.title(),
         model="Protocol Wizard",
         configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
