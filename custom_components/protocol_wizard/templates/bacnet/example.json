@@ -1,4 +1,4 @@
-{
+[
   {
       "name": "Room Temperature",
       "address": "analogInput:0:presentValue",
@@ -42,4 +42,4 @@
       "rw": "rw",
       "write_priority": 8
   }
-}
+]
