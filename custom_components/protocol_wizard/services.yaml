@@ -579,6 +579,9 @@ write_mqtt:
 read_bacnet:
   name: Read BACnet Property
   description: Read a property from a BACnet device
+  target:
+    entity:
+      integration: protocol_wizard
   fields:
     device_instance:
       required: true
@@ -614,6 +617,9 @@ read_bacnet:
 write_bacnet:
   name: Write BACnet Property
   description: Write a property on a BACnet device
+  target:
+    entity:
+      integration: protocol_wizard
   fields:
     device_instance:
       required: true
@@ -643,6 +649,11 @@ write_bacnet:
 discover_bacnet:
   name: Discover BACnet Devices
   description: Scan the network for BACnet devices using Who-Is broadcast.
+  target:
+    entity:
+      integration: protocol_wizard
   fields:
     timeout: discovery timeout (5-60 seconds)
+      required: false
     network_number: optional network to scan
+      required: false
