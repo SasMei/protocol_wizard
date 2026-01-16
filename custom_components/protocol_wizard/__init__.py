@@ -644,7 +644,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 address=address,
                 entity_config=entity_config,
             )
-        except Exception err:
+        except Exception as err:
             _LOGGER.debug("BACnet Read failed returned %s with error: %s",value, err)
         if value is None:
            _LOGGER.error(f"Failed to read BACnet address {address}")
@@ -682,7 +682,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                 value=value,
                 entity_config=entity_config,
             )
-        except Exception err:
+        except Exception as err:
             _LOGGER.debug("BACnet write failed, returned %s with error: %s",success, err)
         
         if not success:
