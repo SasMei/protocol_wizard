@@ -631,7 +631,7 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         address = call.data.get("address")
         device_instance = call.data.get("device_instance")
         if not address:
-            raise HomeAssistantError("address is required")
+           _LOGGER.error("address is required for bacnet read")
         
         entity_config = {
             "address": address,
@@ -639,14 +639,15 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "device_id": call.data.get("device_id", None),
             "device_instance" : device_instance
         }
-        
-        value = await coordinator.async_read_entity(
-            address=address,
-            entity_config=entity_config,
-        )
-        
+        try:
+            value = await coordinator.async_read_entity(
+                address=address,
+                entity_config=entity_config,
+            )
+        except Exception err:
+            _LOGGER.debug("BACnet Read failed returned %s with error: %s",value, err)
         if value is None:
-            raise HomeAssistantError(f"Failed to read BACnet address {address}")
+           _LOGGER.error(f"Failed to read BACnet address {address}")
         
         return {"value": value}
     
@@ -659,9 +660,9 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         device_instance = call.data.get("device_instance")
         
         if not address:
-            raise HomeAssistantError("address is required")
+            _LOGGER.error("address is required writing to bacnet")
         if value is None:
-            raise HomeAssistantError("value is required")
+            _LOGGER.error("value is required writing to bacnet")
         
         entity_config = {
             "address": address,
@@ -675,15 +676,17 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             "write_bacnet service: address=%s, value=%r, priority=%s",
             address, value, entity_config.get("priority")
         )
-        
-        success = await coordinator.async_write_entity(
-            address=address,
-            value=value,
-            entity_config=entity_config,
-        )
+        try:
+            success = await coordinator.async_write_entity(
+                address=address,
+                value=value,
+                entity_config=entity_config,
+            )
+        except Exception err:
+            _LOGGER.debug("BACnet write failed, returned %s with error: %s",success, err)
         
         if not success:
-            raise HomeAssistantError(f"Failed to write to BACnet address {address}")
+            _LOGGER.error(f"Failed to write to BACnet address {address}")
         
         return {"success": True}    
     hass.services.async_register(DOMAIN, "write_register", handle_write_register)
