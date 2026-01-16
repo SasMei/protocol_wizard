@@ -29,7 +29,6 @@ _global_app = None
 _app_initialized = False
 
 async def get_my_network_summary(hass):
-    from homeassistant.components.network import async_get_adapters
     
     adapters = await async_get_adapters(hass)
     
@@ -87,7 +86,7 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
         address_adapter = ""
         ip_to_use = "192.168.1.2" # Fallback
         try:
-            address_adapter = await get_my_lan_ip(hass)
+            address_adapter = await get_my_lan_ip_and_subnet(hass)
         except Exception as err:
             _LOGGER.warning("Error in getting adapter info: %s",  err)
         try:
