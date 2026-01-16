@@ -43,9 +43,8 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
 
         try:
             source_ip = await network.async_get_source_ip(hass)
-            return source_ip
         except Exception:
-            return "0.0.0.0" # Fallback
+            source_ip = "0.0.0.0" # Fallback
         # Create a proper Namespace with required arguments
         # CRITICAL: Specify the correct network address to use
         # Use the actual HA IP address on the correct subnet
@@ -58,7 +57,7 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
             # Network - SPECIFY THE CORRECT INTERFACE/ADDRESS
             # This should be HA's IP on the correct subnet where devices are
             # /22 means 192.168.0.0-192.168.3.255 (netmask 255.255.252.0)
-            address=f"{local_ip}/24",
+            address=f"{source_ip}/24",
             network=0,
             
             # Optional
