@@ -5,6 +5,7 @@ import logging
 import asyncio
 from typing import Any, Optional
 from homeassistant.core import HomeAssistant
+from homeassistant.components.network import async_get_source_ip, async_get_adapters
 #import sys
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,6 +28,49 @@ except ImportError:
 _global_app = None
 _app_initialized = False
 
+async def get_my_network_summary(hass):
+    from homeassistant.components.network import async_get_adapters
+    
+    adapters = await async_get_adapters(hass)
+    
+    summary = []
+    for adapter in adapters:
+        if adapter["enabled"]:
+            for ip_info in adapter["ipv4"]:
+                summary.append({
+                    "name": adapter["name"],
+                    "ip": ip_info["address"],
+                    "prefix": ip_info["network_prefix"],  # e.g. 24 for 255.255.255.0 (/24)
+                    "subnet_mask": f"/{ip_info['network_prefix']}",
+                    "default": adapter["default"]
+                })
+    return summary
+
+
+async def get_my_lan_ip_and_subnet(hass):
+    """
+    Returns the preferred LAN IP + subnet prefix (e.g. "192.168.1.185/24")
+    Prioritizes default interface, then private LAN ranges (192.168.*, 10.*, 172.*).
+    """
+    summary = await get_my_network_summary(hass)
+    
+    if not summary:
+        return None, None
+    
+    # 1. Prefer default interface
+    for entry in summary:
+        if entry["default"]:
+            return entry["ip"], entry["prefix"]
+    
+    # 2. Fallback: first private LAN IP
+    for entry in summary:
+        ip = entry["ip"]
+        if ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
+            return entry["ip"], entry["prefix"]
+    
+    # 3. Last resort: first IP
+    return summary[0]["ip"], summary[0]["prefix"]
+    
 
 async def _initialize_bacpypes3(hass: HomeAssistant):
     """Initialize bacpypes3 properly using from_args pattern."""
@@ -38,13 +82,25 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
     try:
         from argparse import Namespace
         import random
-        from homeassistant.components import network
 
-
+        source_ip = ""
+        address_adapter = ""
+        ip_to_use = "192.168.1.2" # Fallback
         try:
-            source_ip = await network.async_get_source_ip(hass)
-        except Exception:
-            source_ip = "0.0.0.0" # Fallback
+            address_adapter = await get_my_lan_ip(hass)
+        except Exception as err:
+            _LOGGER.warning("Error in getting adapter info: %s",  err)
+        try:
+            source_ip = await async_get_source_ip(hass)
+        except Exception as err:
+            _LOGGER.warning("Error in getting IP info: %s",  err)
+        if address_adapter:
+            ip_to_use = address_adapter
+        if source_ip:
+            ip_to_use = source_ip
+
+        _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
+        _LOGGER.debug("IP address available %s", address_adapter )
         # Create a proper Namespace with required arguments
         # CRITICAL: Specify the correct network address to use
         # Use the actual HA IP address on the correct subnet
@@ -57,7 +113,7 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
             # Network - SPECIFY THE CORRECT INTERFACE/ADDRESS
             # This should be HA's IP on the correct subnet where devices are
             # /22 means 192.168.0.0-192.168.3.255 (netmask 255.255.252.0)
-            address=f"{source_ip}/24",
+            address=f"{ip_to_use}",
             network=0,
             
             # Optional
