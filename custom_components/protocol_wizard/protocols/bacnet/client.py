@@ -121,10 +121,10 @@ class BACnetClient:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
                 if self.host == "0.0.0.0": # we want a broadcast one, so let's use that one.
                     ip_to_use = self.host
-                elif source_ip:  # we want an IP address but probably from a client, let's use our own (HA client)
+                elif address_adapter[0]: # we want an IP address but probably from a client, let's use our own (HA client) with right subnet
+                    ip_to_use = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
+                elif source_ip:  # we want an IP address but probably from a client, let's use the fallback if previous one not working.. but lacks subnet!
                     ip_to_use = source_ip
-                elif address_adapter: # we want an IP address but probably from a client, let's use the fallback if previous one not working
-                    ip_to_use = address_adapter
                 _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
                 _LOGGER.debug("IP address available %s", address_adapter )
                 # Create a proper Namespace with required arguments
