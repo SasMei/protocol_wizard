@@ -265,10 +265,10 @@ add_entity:
       name: Address
       description: |
         Protocol-specific address:
-        • Modbus: Register number (e.g., "100")
-        • SNMP: OID (e.g., ".1.3.6.1.2.1.1.5.0")
-        • MQTT: Topic (e.g., "home/sensor/temp")
-        • BACnet: Object address (e.g., "analogInput:0:presentValue")
+        -Modbus: Register number (e.g., "100")
+        -SNMP: OID (e.g., ".1.3.6.1.2.1.1.5.0")
+        -MQTT: Topic (e.g., "home/sensor/temp")
+        -BACnet: Object address (e.g., "analogInput:0:presentValue")
       required: true
       example: "100"
       selector:
@@ -436,7 +436,7 @@ add_entity:
       name: Format String
       description: Optional format string for value display.
       required: false
-      example: "{:.1f}°C"
+      example: "{:.1f}C"
       selector:
         text:
     options:
@@ -480,7 +480,7 @@ add_entity:
         icon:
     unit:
       name: Unit of Measurement
-      description: Unit to display (e.g., °C, kW, %).
+      description: Unit to display (e.g., C, kW, %).
       required: false
       example: "°C"
       selector:
