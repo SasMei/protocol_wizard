@@ -536,7 +536,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors = {}
                 try:
                     from .protocols.bacnet.client import BACnetClient
-                    client = BACnetClient(host, device_id, port)
+                    client = BACnetClient(self.hass, host, device_id, port)
                     
                     if await client.connect():
                         return self.async_create_entry(
@@ -570,6 +570,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             
             # Create temporary client for discovery
             discovery_client = BACnetClient(
+                self.hass,
                 host="0.0.0.0",  # Listen on all interfaces
                 device_id=None,   # Discovery mode
                 port=47808
