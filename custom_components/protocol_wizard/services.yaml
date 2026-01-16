@@ -482,7 +482,7 @@ add_entity:
       name: Unit of Measurement
       description: Unit to display (e.g., C, kW, %).
       required: false
-      example: "°C"
+      example: "C"
       selector:
         text:
     min:
@@ -583,6 +583,12 @@ read_bacnet:
     entity:
       integration: protocol_wizard
   fields:
+    device_id:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
     device_instance:
       required: true
       selector:
@@ -603,6 +609,18 @@ write_bacnet:
     entity:
       integration: protocol_wizard
   fields:
+    device_id:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    device_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
     address:
       name: BACnetAddress
       required: true
@@ -614,7 +632,6 @@ write_bacnet:
       required: true
       selector:
         text:
-    offset: reverse offset
 discover_bacnet:
   name: Discover BACnet Devices
   description: Scan the network for BACnet devices using Who-Is broadcast.
@@ -623,6 +640,4 @@ discover_bacnet:
       integration: protocol_wizard
   fields:
     timeout: discovery timeout (5-60 seconds)
-      required: false
     network_number: optional network to scan
-      required: false
