@@ -97,7 +97,7 @@ async def _initialize_bacpypes3(hass: HomeAssistant):
             ip_to_use = address_adapter
         if source_ip:
             ip_to_use = source_ip
-
+        ip_to_use = "0.0.0.0" # quick check hack for broadcast test
         _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
         _LOGGER.debug("IP address available %s", address_adapter )
         # Create a proper Namespace with required arguments
