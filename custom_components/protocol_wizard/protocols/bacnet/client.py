@@ -23,11 +23,6 @@ except ImportError:
     HAS_BACPYPES3 = False
     _LOGGER.error("bacpypes3 library not installed")
 
-
-# Global application instance
-_global_app = None
-_app_initialized = False
-
 async def get_my_network_summary(hass):
     
     adapters = await async_get_adapters(hass)
@@ -71,90 +66,6 @@ async def get_my_lan_ip_and_subnet(hass):
     return summary[0]["ip"], summary[0]["prefix"]
     
 
-async def _initialize_bacpypes3(hass: HomeAssistant):
-    """Initialize bacpypes3 properly using from_args pattern."""
-    global _global_app, _app_initialized
-    
-    if _app_initialized:
-        return _global_app
-    
-    try:
-        from argparse import Namespace
-        import random
-
-        source_ip = ""
-        address_adapter = ""
-        ip_to_use = "192.168.1.2" # Fallback
-        try:
-            address_adapter = await get_my_lan_ip_and_subnet(hass)
-        except Exception as err:
-            _LOGGER.warning("Error in getting adapter info: %s",  err)
-        try:
-            source_ip = await async_get_source_ip(hass)
-        except Exception as err:
-            _LOGGER.warning("Error in getting IP info: %s",  err)
-        if address_adapter:
-            ip_to_use = address_adapter
-        if source_ip:
-            ip_to_use = source_ip
-        ip_to_use = "0.0.0.0" # quick check hack for broadcast test
-        _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
-        _LOGGER.debug("IP address available %s", address_adapter )
-        # Create a proper Namespace with required arguments
-        # CRITICAL: Specify the correct network address to use
-        # Use the actual HA IP address on the correct subnet
-        args = Namespace(
-            # Required
-            name="Protocol Wizard Client",
-            instance=random.randint(100000, 999999),
-            vendoridentifier=999,
-            
-            # Network - SPECIFY THE CORRECT INTERFACE/ADDRESS
-            # This should be HA's IP on the correct subnet where devices are
-            # /22 means 192.168.0.0-192.168.3.255 (netmask 255.255.252.0)
-            address=f"{ip_to_use}",
-            network=0,
-            
-            # Optional
-            foreign=None,
-            ttl=30,
-            bbmd=None,
-            
-            # Logging (set to None/False to avoid log handler issues)
-            loggers=None,
-            debug=None,
-            color=None,
-            route_aware=None,
-        )
-        
-        _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s", 
-                    args.instance, args.address)
-        
-        # from_args is synchronous, not async!
-        _global_app = Application.from_args(args)
-        
-        _LOGGER.info("BACnet application initialized successfully!")
-        _LOGGER.info("Has elementService: %s", hasattr(_global_app, 'elementService'))
-        
-        # Log network configuration
-        if hasattr(_global_app, 'link_layers'):
-            _LOGGER.info("Link layers: %s", _global_app.link_layers)
-            for port_id, link_layer in _global_app.link_layers.items():
-                if hasattr(link_layer, 'address'):
-                    _LOGGER.info("  Link layer %s address: %s", port_id, link_layer.address)
-                if hasattr(link_layer, 'broadcast'):
-                    _LOGGER.info("  Link layer %s broadcast: %s", port_id, link_layer.broadcast)
-        
-        _app_initialized = True
-        
-        return _global_app
-        
-    except Exception as err:
-        _LOGGER.error("Failed to initialize bacpypes3: %s", err)
-        import traceback
-        traceback.print_exc()
-    
-    return None
 
 
 class BACnetClientApp(Application):
@@ -190,7 +101,83 @@ class BACnetClient:
         self.app: Optional[Application] = None
         self._connected = False
         self.hass = hass
+        self._bacpypeinstance = None
     
+    async def _initialize_bacpypes3(self, hass: HomeAssistant):
+        """Initialize bacpypes3 properly using from_args pattern."""
+        if not self._bacpypeinstance:
+            try:
+                from argparse import Namespace
+                import random
+        
+                source_ip = self.host
+                address_adapter = self.host
+                ip_to_use = self.host
+                if not self.host: # just couple it to the local client
+                    try:
+                        address_adapter = await get_my_lan_ip_and_subnet(hass)
+                    except Exception as err:
+                        _LOGGER.warning("Error in getting adapter info: %s",  err)
+                    try:
+                        source_ip = await async_get_source_ip(hass)
+                    except Exception as err:
+                        _LOGGER.warning("Error in getting IP info: %s",  err)
+                    if address_adapter:
+                        ip_to_use = address_adapter
+                    if source_ip:
+                        ip_to_use = source_ip
+                    ip_to_use = "0.0.0.0" # quick check hack override for broadcast test
+                _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
+                _LOGGER.debug("IP address available %s", address_adapter )
+                # Create a proper Namespace with required arguments
+                # CRITICAL: Specify the correct network address to use
+                # Use the actual HA IP address on the correct subnet
+                args = Namespace(
+                    # Required
+                    name="Protocol Wizard Client",
+                    instance=random.randint(100000, 999999),
+                    vendoridentifier=999,
+                    address=f"{ip_to_use}",
+                    network=0,
+                    
+                    # Optional
+                    foreign=None,
+                    ttl=30,
+                    bbmd=None,
+                    
+                    # Logging (set to None/False to avoid log handler issues)
+                    loggers=None,
+                    debug=None,
+                    color=None,
+                    route_aware=None,
+                )
+                
+                _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s", 
+                            args.instance, args.address)
+                
+                # from_args is synchronous, not async!
+                theApp = Application.from_args(args)
+                
+                _LOGGER.info("BACnet application initialized successfully!")
+                _LOGGER.info("Has elementService: %s", hasattr(theApp, 'elementService'))
+                
+                # Log network configuration
+                if hasattr(theApp, 'link_layers'):
+                    _LOGGER.info("Link layers: %s", theApp.link_layers)
+                    for port_id, link_layer in theApp.link_layers.items():
+                        if hasattr(link_layer, 'address'):
+                            _LOGGER.info("  Link layer %s address: %s", port_id, link_layer.address)
+                        if hasattr(link_layer, 'broadcast'):
+                            _LOGGER.info("  Link layer %s broadcast: %s", port_id, link_layer.broadcast)
+                
+                return theApp
+                
+            except Exception as err:
+                _LOGGER.error("Failed to initialize bacpypes3: %s", err)
+                import traceback
+                traceback.print_exc()
+        
+        return None
     
     async def connect(self) -> bool:
         """Connect to BACnet network."""
@@ -198,16 +185,14 @@ class BACnetClient:
             _LOGGER.info("Connecting to BACnet network")
             
             # Initialize bacpypes3 using from_args
-            await _initialize_bacpypes3(self.hass)
+            self._bacpypeinstance = await self._initialize_bacpypes3(self.hass)
             
-            # Get global app
-            global _global_app
             
-            if _global_app is None:
+            if self._bacpypeinstance is None:
                 _LOGGER.error("Failed to create BACnet application")
                 return False
             
-            self.app = _global_app
+            self.app = self._bacpypeinstance
             
             # Check if initialized properly
             has_element_service = hasattr(self.app, 'elementService')
