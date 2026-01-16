@@ -441,7 +441,7 @@ add_entity:
         text:
     options:
       name: Options (Select Entity)
-      description: JSON mapping for select entities (e.g., {"0": "Off", "1": "On"}).
+      description: JSON mapping for select entities.
       required: false
       example: '{"0": "Off", "1": "On"}'
       selector:
