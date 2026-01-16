@@ -16,7 +16,7 @@ try:
 #    from bacpypes3.local.device import DeviceObject
     from bacpypes3.primitivedata import ObjectIdentifier
     from bacpypes3.basetypes import PropertyIdentifier
-    from bacpypes3.pdu import Address
+    from bacpypes3.pdu import Address, LocalBroadcast
 #    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
     HAS_BACPYPES3 = True
 except ImportError:
@@ -272,7 +272,7 @@ class BACnetClient:
                 else:
                     # Broadcast Who-Is
                     _LOGGER.info("Sending broadcast Who-Is (no specific target)")
-                    await self.app.who_is()
+                    await self.app.who_is(address=LocalBroadcast())
                     _LOGGER.info("Broadcast Who-Is sent")
                 
                 _LOGGER.info("Who-Is sent successfully")
