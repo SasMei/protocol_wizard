@@ -653,7 +653,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     from .protocols.bacnet.client import BACnetClient
                     
-                    client = BACnetClient(host, device_id, port, network_number)
+                    client = BACnetClient(self.hass, host, device_id, port, network_number)
                     
                     if await client.connect():
                         title = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
