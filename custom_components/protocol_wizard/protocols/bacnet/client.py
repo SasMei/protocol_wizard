@@ -110,23 +110,21 @@ class BACnetClient:
                 from argparse import Namespace
                 import random
         
-                source_ip = self.host
-                address_adapter = self.host
-                ip_to_use = self.host
-                if not self.host: # just couple it to the local client
-                    try:
-                        address_adapter = await get_my_lan_ip_and_subnet(hass)
-                    except Exception as err:
-                        _LOGGER.warning("Error in getting adapter info: %s",  err)
-                    try:
-                        source_ip = await async_get_source_ip(hass)
-                    except Exception as err:
-                        _LOGGER.warning("Error in getting IP info: %s",  err)
-                    if address_adapter:
-                        ip_to_use = address_adapter
-                    if source_ip:
-                        ip_to_use = source_ip
-                    ip_to_use = "0.0.0.0" # quick check hack override for broadcast test
+                source_ip = address_adapter = ip_to_use = self.host
+                try:
+                    address_adapter = await get_my_lan_ip_and_subnet(hass)
+                except Exception as err:
+                    _LOGGER.warning("Error in getting adapter info: %s",  err)
+                try:
+                    source_ip = await async_get_source_ip(hass)
+                except Exception as err:
+                    _LOGGER.warning("Error in getting HA local IP info: %s",  err)
+                if self.host == "0.0.0.0": # we want a broadcast one, so let's use that one.
+                    ip_to_use = self.host
+                elif source_ip:  # we want an IP address but probably from a client, let's use our own (HA client)
+                    ip_to_use = source_ip
+                elif address_adapter: # we want an IP address but probably from a client, let's use the fallback if previous one not working
+                    ip_to_use = address_adapter
                 _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
                 _LOGGER.debug("IP address available %s", address_adapter )
                 # Create a proper Namespace with required arguments
