@@ -23,7 +23,7 @@ All run-time!
 
 ## Features
 
-- Supports already fully **MQTT, Modbus, SNMP**
+- Supports already **MQTT, Modbus, SNMP, BACnet**
 - **Zero YAML configuration** — everything done via the Home Assistant UI
 - Device templates support! Just present your device as a json template! (see below)
 - Full support for Modbus **serial (RS485/USB)** and **IP-based (TCP & UDP)**
@@ -220,6 +220,7 @@ When adding or editing a register, the following fields are available:
 
 ## Roadmap & Planned Features
 - More **Templates for common devices**: More templates pre-loaded with the integration
+- KNX
 
 ## Support & Feedback
 
