@@ -11,7 +11,7 @@ See [DOCUMENTATION](https://github.com/partach/protocol_wizard/wiki) for details
 
 **Configure and control devices entirely from the UI — no YAML, no restarts!**<br>
 
-Protocol Wizard lets you discover, test, and integrate devices (Modbus, SNMP, MQTT) directly in Home Assistant — all through a simple, powerful interface.<br>
+Protocol Wizard lets you discover, test, and integrate devices (Modbus, SNMP, MQTT, BACnet) directly in Home Assistant — all through a simple, powerful interface.<br>
 All run-time!
 
 <p align="center">
