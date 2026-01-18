@@ -136,7 +136,7 @@ class BACnetClient:
                     instance=random.randint(100000, 999999),
                     vendoridentifier=999,
                     address=f"{ip_to_use}",
-                    network=0,
+                    network=self.network_number,
                     
                     # Optional
                     foreign=None,
