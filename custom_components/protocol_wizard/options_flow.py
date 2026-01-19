@@ -26,10 +26,11 @@ from .const import (
     CONF_PROTOCOL,
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
+    CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
-    CONF_PROTOCOL_MQTT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -410,6 +411,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             return SNMPSchemaHandler()
         elif self.protocol == CONF_PROTOCOL_MQTT:
             return MQTTSchemaHandler()
+        elif self.protocol == CONF_PROTOCOL_BACNET:
+            return BACnetSchemaHandler()
         return ModbusSchemaHandler()
 
 
@@ -618,7 +621,305 @@ class ModbusSchemaHandler:
         
         return added
 
-
+class BACnetSchemaHandler:
+    """Schema handler for BACnet entities."""
+    
+    config_key = CONF_ENTITIES  # BACnet uses 'entities' key
+    
+    def get_schema(self, defaults=None):
+        """Return the schema for BACnet entity configuration."""
+        defaults = defaults or {}
+        
+        return vol.Schema({
+            vol.Required("name", default=defaults.get("name")): str,
+            
+            # BACnet address format: "objectType:instance:property"
+            vol.Required("address", default=defaults.get("address")): str,
+            
+            # Object type dropdown
+            vol.Optional("object_type_helper", default=defaults.get("object_type_helper", "analogInput")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "analogInput", "label": "Analog Input"},
+                            {"value": "analogOutput", "label": "Analog Output"},
+                            {"value": "analogValue", "label": "Analog Value"},
+                            {"value": "binaryInput", "label": "Binary Input"},
+                            {"value": "binaryOutput", "label": "Binary Output"},
+                            {"value": "binaryValue", "label": "Binary Value"},
+                            {"value": "multiStateInput", "label": "Multi-State Input"},
+                            {"value": "multiStateOutput", "label": "Multi-State Output"},
+                            {"value": "multiStateValue", "label": "Multi-State Value"},
+                            {"value": "accumulator", "label": "Accumulator"},
+                            {"value": "device", "label": "Device"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            # Data type
+            vol.Required("data_type", default=defaults.get("data_type", "float")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "float", "label": "Float (Decimal)"},
+                            {"value": "integer", "label": "Integer (Whole Number)"},
+                            {"value": "boolean", "label": "Boolean (True/False)"},
+                            {"value": "string", "label": "String (Text)"},
+                            {"value": "enumerated", "label": "Enumerated (Options)"},
+                            {"value": "unsigned", "label": "Unsigned Integer"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            # Read/Write mode
+            vol.Optional("rw", default=defaults.get("rw", "read")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "read", "label": "Read Only"},
+                            {"value": "write", "label": "Write Only"},
+                            {"value": "rw", "label": "Read/Write"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            # Write priority (for writable entities)
+            vol.Optional("write_priority", default=defaults.get("write_priority", 8)):
+                vol.All(vol.Coerce(int), vol.Range(min=1, max=16)),
+            
+            # Home Assistant metadata
+            vol.Optional("device_class", default=defaults.get("device_class", " ")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            " ",
+                            "temperature",
+                            "humidity", 
+                            "pressure",
+                            "power",
+                            "energy",
+                            "voltage",
+                            "current",
+                            "frequency",
+                            "duration",
+                            "illuminance",
+                            "gas",
+                            "moisture",
+                            "pm25",
+                            "carbon_dioxide",
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            vol.Optional("state_class", default=defaults.get("state_class", " ")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[" ", "measurement", "total", "total_increasing"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            vol.Optional("entity_category", default=defaults.get("entity_category", " ")):
+                selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[" ", "diagnostic", "config"],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            
+            vol.Optional("icon", default=defaults.get("icon", "")): str,
+            vol.Optional("unit", default=defaults.get("unit", "")): str,
+            
+            # Value transformation
+            vol.Optional("scale", default=defaults.get("scale", 1.0)): vol.Coerce(float),
+            vol.Optional("offset", default=defaults.get("offset", 0.0)): vol.Coerce(float),
+            vol.Optional("format", default=defaults.get("format", "")): str,
+            
+            # Options mapping (JSON string)
+            vol.Optional("options", default=defaults.get("options", "")): str,
+            
+            # Number entity constraints (for writable numeric entities)
+            vol.Optional("min", default=defaults.get("min", 0.0)): vol.Coerce(float),
+            vol.Optional("max", default=defaults.get("max", 100.0)): vol.Coerce(float),
+            vol.Optional("step", default=defaults.get("step", 1.0)): vol.Coerce(float),
+        })
+    
+    
+    def process_input(self, user_input, errors, existing=None):
+        """Process and validate BACnet entity input."""
+        # Start with existing data (for edits) or empty dict
+        processed = dict(existing) if existing else {}
+        
+        # Update with new values
+        processed.update(user_input)
+        
+        # Validate address format
+        address = processed.get("address", "").strip()
+        if not address:
+            errors["address"] = "Address is required"
+            return None
+        
+        # Validate BACnet address format: "objectType:instance:property"
+        parts = address.split(":")
+        if len(parts) != 3:
+            errors["address"] = "Invalid format. Expected: objectType:instance:property"
+            return None
+        
+        # Validate instance is a number
+        try:
+            instance = int(parts[1])
+            if instance < 0 or instance > 4194303:
+                errors["address"] = "Instance must be between 0 and 4194303"
+                return None
+        except ValueError:
+            errors["address"] = "Instance must be a number"
+            return None
+        
+        # Validate write priority
+        try:
+            priority = int(processed.get("write_priority", 8))
+            if priority < 1 or priority > 16:
+                errors["write_priority"] = "Priority must be between 1 and 16"
+                return None
+            processed["write_priority"] = priority
+        except (ValueError, TypeError):
+            errors["write_priority"] = "Invalid priority value"
+            return None
+        
+        # Parse options JSON if provided
+        opts = processed.get("options", "")
+        if isinstance(opts, dict):
+            # Handle dict for select entity (value: label)
+            opts_str = json.dumps(opts)  # or keep as dict if your schema_handler accepts it
+        elif isinstance(opts, str):
+            opts_str = opts.strip()
+        else:
+            opts_str = ""
+        if opts_str:
+            try:
+                opts = json.loads(opts_str)
+                if not isinstance(opts, dict):
+                    errors["options"] = "Options must be a JSON object"
+                    return None
+                processed["options"] = opts
+            except json.JSONDecodeError as err:
+                errors["options"] = f"Invalid JSON: {err}"
+                return None
+        else:
+            processed.pop("options", None)
+        
+        # Clean empty strings
+        for field in ["format", "device_class", "state_class", "entity_category", "icon", "unit"]:
+            value = processed.get(field)
+            if value in ("", " ", None):
+                processed.pop(field, None)
+        
+        # Ensure numeric fields have valid values
+        try:
+            processed["scale"] = float(processed.get("scale", 1.0))
+            processed["offset"] = float(processed.get("offset", 0.0))
+            processed["min"] = float(processed.get("min", 0.0))
+            processed["max"] = float(processed.get("max", 100.0))
+            processed["step"] = float(processed.get("step", 1.0))
+        except (ValueError, TypeError):
+            errors["scale"] = "Invalid numeric value"
+            return None
+        
+        # Set required defaults
+        processed.setdefault("data_type", "float")
+        processed.setdefault("rw", "read")
+        processed.setdefault("write_priority", 8)
+        processed.setdefault("scale", 1.0)
+        processed.setdefault("offset", 0.0)
+        
+        # Remove helper field (not stored)
+        processed.pop("object_type_helper", None)
+        
+        return processed
+    
+    
+    def get_defaults(self, entity):
+        """Return entity dict with defaults for form display."""
+        defaults = dict(entity)
+        
+        # Parse address to extract object type for helper field
+        address = defaults.get("address", "")
+        if address:
+            parts = address.split(":")
+            if len(parts) == 3:
+                defaults["object_type_helper"] = parts[0]
+        
+        # Set empty string for optional fields
+        defaults.setdefault("device_class", " ")
+        defaults.setdefault("state_class", " ")
+        defaults.setdefault("entity_category", " ")
+        defaults.setdefault("icon", "")
+        defaults.setdefault("unit", "")
+        defaults.setdefault("format", "")
+        
+        # Ensure numeric fields have values
+        defaults.setdefault("scale", 1.0)
+        defaults.setdefault("offset", 0.0)
+        defaults.setdefault("write_priority", 8)
+        defaults.setdefault("min", 0.0)
+        defaults.setdefault("max", 100.0)
+        defaults.setdefault("step", 1.0)
+        
+        # Handle options
+        opts = defaults.get("options")
+        if isinstance(opts, dict):
+            defaults["options"] = json.dumps(opts)
+        else:
+            defaults.setdefault("options", "")
+        
+        # Ensure required fields
+        defaults.setdefault("data_type", "float")
+        defaults.setdefault("rw", "read")
+        
+        return defaults
+    
+    
+    def format_label(self, entity):
+        """Format entity label for display."""
+        name = entity.get("name", "Unknown")
+        address = entity.get("address", "")
+        
+        # Parse address for better display
+        if address:
+            parts = address.split(":")
+            if len(parts) == 3:
+                # Show: "Name (objectType:instance)"
+                return f"{name} ({parts[0]}:{parts[1]})"
+        
+        return f"{name} @ {address}"
+    
+    
+    def merge_template(self, entities, template):
+        """Merge template entities, processing each to add defaults."""
+        added = 0
+        existing = {(e.get("name"), e.get("address")) for e in entities}
+        
+        for template_entity in template:
+            key = (template_entity.get("name"), template_entity.get("address"))
+            if key not in existing:
+                # Process template entity to add missing defaults
+                errors = {}
+                processed = self.process_input(template_entity, errors, existing=None)
+                if processed and not errors:
+                    entities.append(processed)
+                    added += 1
+                else:
+                    _LOGGER.warning(
+                        "Skipped invalid template entity: %s (errors: %s)",
+                        template_entity.get("name"),
+                        errors
+                    )
+        
+        return added
 
 class SNMPSchemaHandler:
     config_key = CONF_ENTITIES
@@ -762,7 +1063,7 @@ class SNMPSchemaHandler:
 class MQTTSchemaHandler:
     """Schema handler for MQTT entities."""
     
-    config_key = "entities"  # MQTT uses 'entities' key
+    config_key = CONF_ENTITIES  # MQTT uses 'entities' key
     
     def get_schema(self, defaults=None):
         """Return the schema for MQTT entity configuration."""

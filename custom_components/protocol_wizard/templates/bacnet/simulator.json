@@ -1,0 +1,50 @@
+[
+    {
+      "name": "Room 1 Temperature",
+      "address": "analogInput:1:presentValue",
+      "data_type": "float",
+      "rw": "read",
+      "object_type_helper": "Analog Input",
+      "unit": "C"
+    },
+    {
+      "name": "Room 2 Temperature",
+      "address": "analogValue:2:presentValue",
+      "data_type": "float",
+      "rw": "read",
+      "object_type_helper": "Analog Value",
+      "unit": "C"
+    },
+    {
+      "name": "Room 1 Light",
+      "address": "binaryValue:1:presentValue",
+      "data_type": "boolean",
+      "rw": "rw",
+      "object_type_helper": "Binary Value",
+      "options": {
+        "inactive": "Off",
+        "active": "On"
+      }
+    },
+    {
+      "name": "HVAC Mode",
+      "address": "multiStateValue:1:presentValue",
+      "data_type": "enum",
+      "rw": "rw",
+      "read_mode": "get",
+      "options": {
+        "1": "Off",
+        "2": "Heat",
+        "3": "Cool",
+        "4": "Auto"
+      }
+    },
+    {
+      "name": "Total Energy",
+      "address": "analogValue:10:presentValue",
+      "data_type": "float",
+      "rw": "read",
+      "read_mode": "get",
+      "unit": "kWh"
+    }
+]

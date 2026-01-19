@@ -1,0 +1,45 @@
+[
+  {
+      "name": "Room Temperature",
+      "address": "analogInput:0:presentValue",
+      "data_type": "float",
+      "rw": "read",
+      "unit": "C",
+      "device_class": "temperature",
+      "state_class": "measurement",
+      "scale": 1.0,
+      "offset": 0.0
+  },
+  {
+      "name": "Damper Position",
+      "address": "analogOutput:0:presentValue",
+      "data_type": "float",
+      "rw": "rw",
+      "unit": "%",
+      "write_priority": 8,
+      "min": 0.0,
+      "max": 100.0,
+      "step": 5.0
+  },
+  {
+      "name": "Room Occupied",
+      "address": "binaryInput:0:presentValue",
+      "data_type": "boolean",
+      "rw": "read",
+      "device_class": "occupancy"
+  },
+  {
+      "name": "Fan Speed",
+      "address": "multiStateInput:0:presentValue",
+      "data_type": "enumerated",
+      "rw": "read",
+      "options": {"0": "Off", "1": "Low", "2": "Medium", "3": "High"}
+  },  
+  {
+      "name": "Pump Control",
+      "address": "binaryOutput:0:presentValue",
+      "data_type": "boolean",
+      "rw": "rw",
+      "write_priority": 8
+  }
+]

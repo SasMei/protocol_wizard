@@ -19,6 +19,7 @@ from .protocols import ProtocolRegistry
 from .protocols.modbus import ModbusClient
 from .protocols.snmp import SNMPClient
 from .protocols.mqtt import MQTTClient
+from .protocols.bacnet.client import BACnetClient
 from .template_utils import ensure_user_template_dirs, load_template
 
 from .const import (
@@ -45,6 +46,7 @@ from .const import (
     CONF_PROTOCOL_MODBUS,
     CONF_PROTOCOL_SNMP,
     CONF_PROTOCOL_MQTT,
+    CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
     CONF_TEMPLATE,
     CONF_TEMPLATE_APPLIED,
@@ -141,6 +143,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
             client = _create_mqtt_client(config)
+        elif protocol_name == CONF_PROTOCOL_BACNET:
+            client = _create_bacnet_client(config, hass)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
@@ -173,13 +177,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     
     hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
-    
+#    devicename = entry.data.get(CONF_NAME, f"{protocol_name.title()} Device")
+    devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
     # CREATE DEVICE REGISTRY ENTRY
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
-        name=entry.data.get(CONF_NAME, f"{protocol_name.title()} Device"),
+        name=devicename,
         manufacturer=protocol_name.title(),
         model="Protocol Wizard",
         configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
@@ -304,7 +309,17 @@ def _create_mqtt_client(config: dict) -> MQTTClient:
         password=config.get(CONF_PASSWORD) or None,
         timeout=10.0,
     )
-
+    
+def _create_bacnet_client(config: dict, hass: HomeAssistant) -> BACnetClient:
+    """Create BACnet client (no caching needed - connectionless)."""
+    return BACnetClient(
+        host=config[CONF_HOST],
+        hass = hass,
+        device_id=config["device_id"],
+        port=config.get(CONF_PORT, 47808),
+        network_number=config.get("network_number")
+    )
+    
 async def async_setup_services(hass: HomeAssistant) -> None:
     """Set up protocol-agnostic services."""
     
@@ -608,7 +623,72 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             raise HomeAssistantError(f"Failed to publish to MQTT topic {topic}")
         
         return {"success": True}
+        
+    async def handle_read_bacnet(call: ServiceCall):
+        """BACnet read service."""
+        coordinator = _get_coordinator(call)
+        
+        address = call.data.get("address")
+        device_instance = call.data.get("device_instance")
+        if not address:
+           _LOGGER.error("address is required for bacnet read")
+        
+        entity_config = {
+            "address": address,
+            "data_type": call.data.get("data_type", "float"),
+            "device_id": call.data.get("device_id", None),
+            "device_instance" : device_instance
+        }
+        try:
+            value = await coordinator.async_read_entity(
+                address=address,
+                entity_config=entity_config,
+            )
+        except Exception as err:
+            _LOGGER.debug("BACnet Read failed returned %s with error: %s",value, err)
+        if value is None:
+           _LOGGER.error(f"Failed to read BACnet address {address}")
+        
+        return {"value": value}
     
+    async def handle_write_bacnet(call: ServiceCall):
+        """BACnet write service."""
+        coordinator = _get_coordinator(call)
+        
+        address = call.data.get("address")
+        value = call.data.get("value")
+        device_instance = call.data.get("device_instance")
+        
+        if not address:
+            _LOGGER.error("address is required writing to bacnet")
+        if value is None:
+            _LOGGER.error("value is required writing to bacnet")
+        
+        entity_config = {
+            "address": address,
+            "data_type": call.data.get("data_type", "float"),
+            "device_id": call.data.get("device_id", None),
+            "priority": call.data.get("priority", 8),  # BACnet write priority
+            "device_instance" : device_instance
+        }
+        
+        _LOGGER.debug(
+            "write_bacnet service: address=%s, value=%r, priority=%s",
+            address, value, entity_config.get("priority")
+        )
+        try:
+            success = await coordinator.async_write_entity(
+                address=address,
+                value=value,
+                entity_config=entity_config,
+            )
+        except Exception as err:
+            _LOGGER.debug("BACnet write failed, returned %s with error: %s",success, err)
+        
+        if not success:
+            _LOGGER.error(f"Failed to write to BACnet address {address}")
+        
+        return {"success": True}    
     hass.services.async_register(DOMAIN, "write_register", handle_write_register)
     hass.services.async_register(
         DOMAIN,
@@ -639,7 +719,18 @@ async def async_setup_services(hass: HomeAssistant) -> None:
         "write_mqtt",
         handle_write_mqtt,
     )
-
+    hass.services.async_register(
+        DOMAIN,
+        "read_bacnet",
+        handle_read_bacnet,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        "write_bacnet",
+        handle_write_bacnet,
+    )
+    
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     

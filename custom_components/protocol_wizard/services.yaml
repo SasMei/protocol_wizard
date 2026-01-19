@@ -244,6 +244,9 @@ read_snmp:
       required: false
       selector:
         boolean:
+# Updated add_entity service with BACnet support
+# Replace the existing add_entity in services.yaml with this
+
 add_entity:
   name: Add Entity
   description: Add a new entity to the Protocol Wizard integration from the frontend.
@@ -260,7 +263,12 @@ add_entity:
         text:
     address:
       name: Address
-      description: Register address (Modbus) or OID (SNMP).
+      description: |
+        Protocol-specific address:
+        -Modbus: Register number (e.g., "100")
+        -SNMP: OID (e.g., ".1.3.6.1.2.1.1.5.0")
+        -MQTT: Topic (e.g., "home/sensor/temp")
+        -BACnet: Object address (e.g., "analogInput:0:presentValue")
       required: true
       example: "100"
       selector:
@@ -270,18 +278,33 @@ add_entity:
       description: How to interpret the value.
       required: false
       default: uint16
-      example: "uint16"
       selector:
         select:
           options:
-            - uint16
-            - int16
-            - uint32
-            - int32
-            - float32
-            - uint64
-            - int64
-            - string
+            - label: Unsigned 16-bit
+              value: uint16
+            - label: Signed 16-bit
+              value: int16
+            - label: Unsigned 32-bit
+              value: uint32
+            - label: Signed 32-bit
+              value: int32
+            - label: Float 32-bit
+              value: float32
+            - label: Unsigned 64-bit
+              value: uint64
+            - label: Signed 64-bit
+              value: int64
+            - label: Float (BACnet/SNMP)
+              value: float
+            - label: Integer (BACnet/SNMP)
+              value: integer
+            - label: Boolean
+              value: boolean
+            - label: String
+              value: string
+            - label: Enumerated (BACnet)
+              value: enumerated
     rw:
       name: Read/Write Mode
       description: Access mode for the entity.
@@ -315,11 +338,12 @@ add_entity:
           max: 1000000
           step: 0.01
           mode: box
+    
+    # Modbus-specific fields
     register_type:
       name: Register Type (Modbus)
       description: Modbus register type.
       required: false
-      example: "holding"
       selector:
         select:
           options:
@@ -358,6 +382,8 @@ add_entity:
           max: 20
           step: 1
           mode: box
+    
+    # SNMP-specific fields
     read_mode:
       name: Read Mode (SNMP)
       description: SNMP read mode.
@@ -368,11 +394,49 @@ add_entity:
           options:
             - get
             - walk
+    
+    # MQTT-specific fields
+    qos:
+      name: QoS (MQTT)
+      description: MQTT Quality of Service level.
+      required: false
+      default: 0
+      selector:
+        select:
+          options:
+            - label: "QoS 0 (At most once)"
+              value: "0"
+            - label: "QoS 1 (At least once)"
+              value: "1"
+            - label: "QoS 2 (Exactly once)"
+              value: "2"
+    retain:
+      name: Retain (MQTT)
+      description: Whether messages should be retained on broker.
+      required: false
+      default: false
+      selector:
+        boolean:
+    
+    # BACnet-specific fields
+    write_priority:
+      name: Write Priority (BACnet)
+      description: BACnet write priority (1-16). Lower = higher priority.
+      required: false
+      default: 8
+      selector:
+        number:
+          min: 1
+          max: 16
+          step: 1
+          mode: slider
+    
+    # Common fields for all protocols
     format:
       name: Format String
       description: Optional format string for value display.
       required: false
-      example: "{d} days {h} hours"
+      example: "{:.1f}C"
       selector:
         text:
     options:
@@ -384,7 +448,7 @@ add_entity:
         text:
     device_class:
       name: Device Class
-      description: Device class for the entity.
+      description: Device class for the entity (temperature, power, energy, etc.).
       required: false
       selector:
         text:
@@ -414,6 +478,13 @@ add_entity:
       example: "mdi:thermometer"
       selector:
         icon:
+    unit:
+      name: Unit of Measurement
+      description: Unit to display (e.g., C, kW, %).
+      required: false
+      example: "C"
+      selector:
+        text:
     min:
       name: Minimum Value
       description: Minimum value for number entities.
@@ -505,3 +576,68 @@ write_mqtt:
       default: false
       selector:
         boolean:
+read_bacnet:
+  name: Read BACnet Property
+  description: Read a property from a BACnet device
+  target:
+    entity:
+      integration: protocol_wizard
+  fields:
+    device_id:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    device_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    address:
+      name: BACnetAddress
+      required: true
+      description: BACnet object address in format "objectType:instance:property"
+      example: "analogInput:0:presentValue"
+      selector:
+        text:
+write_bacnet:
+  name: Write BACnet Property
+  description: Write a property on a BACnet device
+  target:
+    entity:
+      integration: protocol_wizard
+  fields:
+    device_id:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    device_instance:
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 4194303
+    address:
+      name: BACnetAddress
+      required: true
+      description: BACnet object address in format "objectType:instance:property"
+      example: "analogInput:0:presentValue"
+      selector:
+        text:
+    value:
+      required: true
+      selector:
+        text:
+discover_bacnet:
+  name: Discover BACnet Devices
+  description: Scan the network for BACnet devices using Who-Is broadcast.
+  target:
+    entity:
+      integration: protocol_wizard
+  fields:
+    timeout: discovery timeout (5-60 seconds)
+    network_number: optional network to scan
