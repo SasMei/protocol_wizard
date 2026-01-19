@@ -639,5 +639,22 @@ discover_bacnet:
     entity:
       integration: protocol_wizard
   fields:
-    timeout: discovery timeout (5-60 seconds)
-    network_number: optional network to scan
+    timeout:
+      name: Timeout
+      description: Discovery timeout in seconds (5-60).
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 5
+          max: 60
+          step: 5
+    network_number:
+      name: Network Number
+      description: Optional BACnet network number to scan (leave empty for all).
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 65534
+          mode: box
