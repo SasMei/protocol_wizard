@@ -3,7 +3,7 @@
   "name": "Protocol Wizard",
   "codeowners": ["@partach"],
   "config_flow": true,
-  "dependencies": ["lovelace","frontend"],
+  "dependencies": ["lovelace","frontend","network"],
   "documentation": "https://github.com/partach/protocol_wizard",
   "integration_type": "hub",
   "iot_class": "local_polling",
