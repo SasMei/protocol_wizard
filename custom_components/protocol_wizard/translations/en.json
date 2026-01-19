@@ -245,7 +245,7 @@
         }
       }
     }
-  }
+  },
   "config": {
     "error": {
       "no_devices_found": "No BACnet devices discovered. Try manual entry.",
