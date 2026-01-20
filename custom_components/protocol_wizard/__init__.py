@@ -52,6 +52,7 @@ from .const import (
     CONF_TEMPLATE_APPLIED,
     CONF_ENTITIES,
     CONF_REGISTERS,
+    CONF_SLAVES,
 )
 
 
@@ -138,7 +139,76 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create protocol-specific client
     try:
         if protocol_name == CONF_PROTOCOL_MODBUS:
-            client = await _create_modbus_client(hass, config, entry)
+            # Get list of slaves (defaults to single slave from CONF_SLAVE_ID for backward compatibility)
+            slaves = entry.options.get(CONF_SLAVES, [])
+            if not slaves:
+                # Backward compatibility: no slaves defined = use CONF_SLAVE_ID
+                default_slave_id = config.get(CONF_SLAVE_ID, 1)
+                slaves = [{"slave_id": default_slave_id, "name": entry.title or "Primary"}]
+            
+            # Create a coordinator for each slave
+            coordinators_created = []
+            for idx, slave_info in enumerate(slaves):
+                slave_id = slave_info["slave_id"]
+                slave_name = slave_info.get("name", f"Slave {slave_id}")
+                
+                # Override slave_id in config for this slave
+                slave_config = dict(config)
+                slave_config[CONF_SLAVE_ID] = slave_id
+                
+                # Create client (uses shared connection via existing caching)
+                client = await _create_modbus_client(hass, slave_config, entry)
+                
+                # Create coordinator
+                update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
+                
+                coordinator = CoordinatorClass(
+                    hass=hass,
+                    client=client,
+                    config_entry=entry,
+                    update_interval=timedelta(seconds=update_interval),
+                )
+                
+                # Only apply template on first slave
+                if idx == 0:
+                    template_name = entry.options.get(CONF_TEMPLATE)
+                    if template_name and not entry.options.get(CONF_TEMPLATE_APPLIED):
+                        _LOGGER.info("Loading template '%s' for new device", template_name)
+                        await _load_template_into_options(hass, entry, protocol_name, template_name)
+                        options = dict(entry.options)
+                        options[CONF_TEMPLATE_APPLIED] = True
+                        hass.config_entries.async_update_entry(entry, options=options)
+                
+                await coordinator.async_config_entry_first_refresh()
+                
+                # Store with unique key if multiple slaves, otherwise use entry_id for backward compatibility
+                if len(slaves) > 1:
+                    coordinator_key = f"{entry.entry_id}_slave_{slave_id}"
+                else:
+                    coordinator_key = entry.entry_id
+                
+                hass.data[DOMAIN]["coordinators"][coordinator_key] = coordinator
+                coordinators_created.append((coordinator_key, slave_name))
+            
+            # Create device registry entries for each slave
+            device_registry = dr.async_get(hass)
+            for coordinator_key, slave_name in coordinators_created:
+                devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
+                if len(slaves) > 1:
+                    devicename = f"{devicename} - {slave_name}"
+                
+                device_registry.async_get_or_create(
+                    config_entry_id=entry.entry_id,
+                    identifiers={(DOMAIN, coordinator_key)},
+                    name=devicename,
+                    manufacturer=protocol_name.title(),
+                    model="Protocol Wizard",
+                    configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+                )
+            
+            # Platforms (forward to all platforms once for all slaves)
+            await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+            
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
@@ -152,46 +222,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to create client for %s: %s", protocol_name, err)
         return False
     
-    # Create coordinator
-    update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
-    
-    coordinator = CoordinatorClass(
-        hass=hass,
-        client=client,
-        config_entry=entry,
-        update_interval=timedelta(seconds=update_interval),
-    )
-    
-    template_name = entry.options.get(CONF_TEMPLATE)
-    
-    if (template_name and not entry.options.get(CONF_TEMPLATE_APPLIED)):
-        _LOGGER.info("Loading template '%s' for new device", template_name)
-        await _load_template_into_options(hass, entry, protocol_name, template_name)
-    
-        # mark as applied
-        options = dict(entry.options)
-        options[CONF_TEMPLATE_APPLIED] = True
-        hass.config_entries.async_update_entry(entry, options=options)
-    
-    
-    await coordinator.async_config_entry_first_refresh()
-    
-    hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
-#    devicename = entry.data.get(CONF_NAME, f"{protocol_name.title()} Device")
-    devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
-    # CREATE DEVICE REGISTRY ENTRY
-    device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
-        config_entry_id=entry.entry_id,
-        identifiers={(DOMAIN, entry.entry_id)},
-        name=devicename,
-        manufacturer=protocol_name.title(),
-        model="Protocol Wizard",
-        configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
-    )
-    
-    # Platforms
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # For non-Modbus protocols, create single coordinator
+    if protocol_name != CONF_PROTOCOL_MODBUS:
+        # Create coordinator
+        update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
+        
+        coordinator = CoordinatorClass(
+            hass=hass,
+            client=client,
+            config_entry=entry,
+            update_interval=timedelta(seconds=update_interval),
+        )
+        
+        template_name = entry.options.get(CONF_TEMPLATE)
+        
+        if (template_name and not entry.options.get(CONF_TEMPLATE_APPLIED)):
+            _LOGGER.info("Loading template '%s' for new device", template_name)
+            await _load_template_into_options(hass, entry, protocol_name, template_name)
+        
+            # mark as applied
+            options = dict(entry.options)
+            options[CONF_TEMPLATE_APPLIED] = True
+            hass.config_entries.async_update_entry(entry, options=options)
+        
+        
+        await coordinator.async_config_entry_first_refresh()
+        
+        hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+        devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
+        
+        # CREATE DEVICE REGISTRY ENTRY
+        device_registry = dr.async_get(hass)
+        device_registry.async_get_or_create(
+            config_entry_id=entry.entry_id,
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=devicename,
+            manufacturer=protocol_name.title(),
+            model="Protocol Wizard",
+            configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+        )
+        
+        # Platforms
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     
     # Services (register once)
     if not hass.data[DOMAIN].get("services_registered"):
