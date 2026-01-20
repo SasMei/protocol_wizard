@@ -12,6 +12,7 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from pymodbus.client.mixin import ModbusClientMixin
+from .client import ModbusClient
 
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
