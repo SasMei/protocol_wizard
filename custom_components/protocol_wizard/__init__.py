@@ -141,22 +141,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if protocol_name == CONF_PROTOCOL_MODBUS:
             # Get list of slaves (defaults to single slave from CONF_SLAVE_ID for backward compatibility)
             slaves = entry.options.get(CONF_SLAVES, [])
+            
+            _LOGGER.info("[Modbus Setup] Entry: %s, has CONF_SLAVES: %s, count: %d", 
+                        entry.title, slaves is not None and len(slaves) > 0, len(slaves) if slaves else 0)
+            
             if not slaves:
                 # Backward compatibility: no slaves defined = use CONF_SLAVE_ID and global CONF_REGISTERS
                 default_slave_id = config.get(CONF_SLAVE_ID, 1)
                 # Check if there are entities in the old location (backward compatibility)
                 old_registers = entry.options.get(CONF_REGISTERS, [])
+                
+                _LOGGER.info("[Modbus Migration] Migrating from old structure: slave_id=%d (from config.data), %d entities (from options.registers)", 
+                             default_slave_id, len(old_registers))
+                
                 slaves = [{
                     "slave_id": default_slave_id, 
                     "name": entry.title or "Primary",
                     "registers": old_registers  # Migrate old entities to slave
                 }]
+                
+                # IMPORTANT: Save the migration to options so it persists
+                options = dict(entry.options)
+                options[CONF_SLAVES] = slaves
+                # Remove old CONF_REGISTERS to complete migration
+                options.pop(CONF_REGISTERS, None)
+                hass.config_entries.async_update_entry(entry, options=options)
+                _LOGGER.info("[Modbus Migration] Migration saved to options")
+            else:
+                _LOGGER.info("[Modbus Setup] Using existing slave structure with %d slaves", len(slaves))
             
             # Create a coordinator for each slave
             coordinators_created = []
             for idx, slave_info in enumerate(slaves):
                 slave_id = slave_info["slave_id"]
                 slave_name = slave_info.get("name", f"Slave {slave_id}")
+                
+                _LOGGER.info("[Modbus Setup] Creating coordinator for slave %d (%s), %d entities", 
+                            slave_id, slave_name, len(slave_info.get('registers', [])))
                 
                 # Override slave_id in config for this slave
                 slave_config = dict(config)
@@ -286,9 +307,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_setup_services(hass)
         hass.data[DOMAIN]["services_registered"] = True
     
-    # Frontend
-    await async_install_frontend_resource(hass)
-    await async_register_card(hass, entry)
+    # Frontend (register once, not per entry)
+    if not hass.data[DOMAIN].get("frontend_registered"):
+        await async_install_frontend_resource(hass)
+        await async_register_card(hass, entry)
+        hass.data[DOMAIN]["frontend_registered"] = True
     
     return True
 
