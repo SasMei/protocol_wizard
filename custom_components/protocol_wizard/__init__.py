@@ -218,7 +218,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # IMPORTANT: Store slave_id in coordinator so it knows which entities to read
                 coordinator.slave_id = slave_id
                 coordinator.slave_index = idx  # Index in slaves list
-                
+
                 # Load template for this specific slave if specified
                 slave_template = slave_info.get("template")
                 if slave_template and not slave_info.get("template_applied"):
@@ -236,14 +236,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         hass.config_entries.async_update_entry(entry, options=options)
                 
                 await coordinator.async_config_entry_first_refresh()
-                
-                # Store with unique key if multiple slaves, otherwise use entry_id for backward compatibility
-                if len(slaves) > 1:
-                    coordinator_key = f"{entry.entry_id}_slave_{slave_id}"
-                else:
-                    coordinator_key = entry.entry_id
-                
+
+                # IMPORTANT: Always use consistent coordinator_key format
+                # This prevents duplicate devices when adding/removing slaves
+                coordinator_key = f"{entry.entry_id}_slave_{slave_id}"
+
+                # Store coordinator_key in coordinator for device identification
+                coordinator.coordinator_key = coordinator_key
+
                 hass.data[DOMAIN]["coordinators"][coordinator_key] = coordinator
+
+                # BACKWARD COMPAT: Also store first slave with entry.entry_id for platform access
+                if idx == 0:
+                    hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+
                 coordinators_created.append((coordinator_key, slave_name, slave_id))
             
             # Create device registry entries for each slave
