@@ -142,9 +142,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Get list of slaves (defaults to single slave from CONF_SLAVE_ID for backward compatibility)
             slaves = entry.options.get(CONF_SLAVES, [])
             if not slaves:
-                # Backward compatibility: no slaves defined = use CONF_SLAVE_ID
+                # Backward compatibility: no slaves defined = use CONF_SLAVE_ID and global CONF_REGISTERS
                 default_slave_id = config.get(CONF_SLAVE_ID, 1)
-                slaves = [{"slave_id": default_slave_id, "name": entry.title or "Primary"}]
+                # Check if there are entities in the old location (backward compatibility)
+                old_registers = entry.options.get(CONF_REGISTERS, [])
+                slaves = [{
+                    "slave_id": default_slave_id, 
+                    "name": entry.title or "Primary",
+                    "registers": old_registers  # Migrate old entities to slave
+                }]
             
             # Create a coordinator for each slave
             coordinators_created = []
@@ -159,7 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Create client (uses shared connection via existing caching)
                 client = await _create_modbus_client(hass, slave_config, entry)
                 
-                # Create coordinator
+                # Create coordinator with slave-specific entity list
                 update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
                 
                 coordinator = CoordinatorClass(
@@ -169,14 +175,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     update_interval=timedelta(seconds=update_interval),
                 )
                 
-                # Only apply template on first slave
-                if idx == 0:
-                    template_name = entry.options.get(CONF_TEMPLATE)
-                    if template_name and not entry.options.get(CONF_TEMPLATE_APPLIED):
-                        _LOGGER.info("Loading template '%s' for new device", template_name)
-                        await _load_template_into_options(hass, entry, protocol_name, template_name)
+                # IMPORTANT: Store slave_id in coordinator so it knows which entities to read
+                coordinator.slave_id = slave_id
+                coordinator.slave_index = idx  # Index in slaves list
+                
+                # Load template for this specific slave if specified
+                slave_template = slave_info.get("template")
+                if slave_template and not slave_info.get("template_applied"):
+                    _LOGGER.info("Loading template '%s' for slave %d (%s)", slave_template, slave_id, slave_name)
+                    # Load template entities for THIS slave
+                    template_entities = await load_template(hass, protocol_name, slave_template)
+                    if template_entities:
+                        # Update this slave's registers
+                        slave_info["registers"] = template_entities
+                        slave_info["template_applied"] = True
+                        
+                        # Save back to options
                         options = dict(entry.options)
-                        options[CONF_TEMPLATE_APPLIED] = True
+                        options[CONF_SLAVES] = slaves
                         hass.config_entries.async_update_entry(entry, options=options)
                 
                 await coordinator.async_config_entry_first_refresh()
@@ -188,11 +204,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     coordinator_key = entry.entry_id
                 
                 hass.data[DOMAIN]["coordinators"][coordinator_key] = coordinator
-                coordinators_created.append((coordinator_key, slave_name))
+                coordinators_created.append((coordinator_key, slave_name, slave_id))
             
             # Create device registry entries for each slave
             device_registry = dr.async_get(hass)
-            for coordinator_key, slave_name in coordinators_created:
+            for coordinator_key, slave_name, slave_id in coordinators_created:
                 devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
                 if len(slaves) > 1:
                     devicename = f"{devicename} - {slave_name}"
@@ -202,7 +218,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     identifiers={(DOMAIN, coordinator_key)},
                     name=devicename,
                     manufacturer=protocol_name.title(),
-                    model="Protocol Wizard",
+                    model=f"Protocol Wizard (Slave {slave_id})",
                     configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
                 )
             
