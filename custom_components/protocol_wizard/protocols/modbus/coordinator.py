@@ -16,7 +16,7 @@ from pymodbus.client.mixin import ModbusClientMixin
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import ModbusClient
-from .const import CONF_REGISTERS, TYPE_SIZES, reg_key, CONF_SLAVES
+from .const import CONF_REGISTERS, TYPE_SIZES, reg_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +24,8 @@ _LOGGER = logging.getLogger(__name__)
 # Setting parent logger to CRITICAL to catch all sub-loggers
 logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
 logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
-logging.getLogger("homeassistant.helpers.update_coordinator").setLevel(logging.CRITICAL)
+# Temporarily allow debug logs for troubleshooting
+# logging.getLogger("homeassistant.helpers.update_coordinator").setLevel(logging.CRITICAL)
 
 @ProtocolRegistry.register("modbus")
 class ModbusCoordinator(BaseProtocolCoordinator):
@@ -57,25 +58,8 @@ class ModbusCoordinator(BaseProtocolCoordinator):
 
         if not await self._async_connect():
             _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
-            return {}
-        
-        # Get entities for THIS SPECIFIC SLAVE
-        # Check if we have slave_id set (multi-slave mode)
-        if hasattr(self, 'slave_id') and hasattr(self, 'slave_index'):
-            # Multi-slave mode: read from this slave's register list
-            slaves = self.my_config_entry.options.get(CONF_SLAVES, [])
-            if slaves and self.slave_index < len(slaves):
-                entities = slaves[self.slave_index].get('registers', [])
-                _LOGGER.debug("[Modbus] Loaded %d entities for slave %d (index %d)", 
-                             len(entities), self.slave_id, self.slave_index)
-            else:
-                _LOGGER.warning("[Modbus] Slave index %d not found in slaves list (total slaves: %d)", 
-                               self.slave_index, len(slaves))
-                entities = []
-        else:
-            # Backward compatibility: single slave mode, read from global CONF_REGISTERS
-            entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
-            _LOGGER.debug("[Modbus] Loaded %d entities from CONF_REGISTERS (backward compat mode)", len(entities))
+            return {}       
+        entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
         
         if not entities:
             return {}
