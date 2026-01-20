@@ -15,7 +15,6 @@ from pymodbus.client.mixin import ModbusClientMixin
 
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
-from .client import ModbusClient
 from .const import TYPE_SIZES, reg_key
 from ...const import CONF_REGISTERS,CONF_SLAVES
 
