@@ -315,6 +315,9 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input:
+            # Reload entities to get current state
+            self._entities = self._load_entities_for_context()
+            
             processed = self.schema_handler.process_input(user_input, errors, existing=None)
             if processed and not errors:
                 self._entities.append(processed)
@@ -472,6 +475,10 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     data_schema=self._get_template_schema(),
                     errors={"base": "template_not_found"},
                 )
+            
+            # IMPORTANT: Reload entities from current config state
+            # (migration may have run since __init__)
+            self._entities = self._load_entities_for_context()
             
             added = self.schema_handler.merge_template(self._entities, entities)
             
