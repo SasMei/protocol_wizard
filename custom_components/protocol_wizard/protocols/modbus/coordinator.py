@@ -16,7 +16,7 @@ from pymodbus.client.mixin import ModbusClientMixin
 from ..base import BaseProtocolCoordinator
 from .. import ProtocolRegistry
 from .client import ModbusClient
-from .const import CONF_REGISTERS, TYPE_SIZES, reg_key
+from .const import CONF_REGISTERS, TYPE_SIZES, reg_key, CONF_SLAVES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -57,8 +57,21 @@ class ModbusCoordinator(BaseProtocolCoordinator):
 
         if not await self._async_connect():
             _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
-            return {}       
-        entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
+            return {}
+        
+        # Get entities for THIS SPECIFIC SLAVE
+        # Check if we have slave_id set (multi-slave mode)
+        if hasattr(self, 'slave_id') and hasattr(self, 'slave_index'):
+            # Multi-slave mode: read from this slave's register list
+            slaves = self.my_config_entry.options.get(CONF_SLAVES, [])
+            if slaves and self.slave_index < len(slaves):
+                entities = slaves[self.slave_index].get('registers', [])
+            else:
+                _LOGGER.warning("[Modbus] Slave index %d not found in slaves list", self.slave_index)
+                entities = []
+        else:
+            # Backward compatibility: single slave mode, read from global CONF_REGISTERS
+            entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
         
         if not entities:
             return {}
