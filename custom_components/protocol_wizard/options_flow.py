@@ -103,19 +103,24 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         menu_options = {
             "settings": "Settings",
         }
-        
-        # For Modbus with multiple slaves, show slave selection
+
+        # For Modbus with slaves structure, show slave selection
         if self.protocol == CONF_PROTOCOL_MODBUS:
             slaves = self._config_entry.options.get(CONF_SLAVES, [])
-            if slaves and len(slaves) > 1:
-                # Multi-slave mode
-                menu_options["select_slave"] = f"⚙️ Configure Slave ({len(slaves)} slaves)"
-            elif slaves and len(slaves) == 1:
-                # Single slave - show entity options directly (entities already loaded)
-                menu_options["add_entity"] = "Add entity"
-                if self._entities:
-                    menu_options["list_entities"] = f"Entities ({len(self._entities)})"
-                    menu_options["edit_entity"] = "Edit entity"
+            if slaves:
+                # Show slave management menu (allows adding more slaves)
+                slave_count = len(slaves)
+                if slave_count == 1:
+                    menu_options["select_slave"] = f"⚙️ Manage Slaves (1 slave, add more)"
+                else:
+                    menu_options["select_slave"] = f"⚙️ Manage Slaves ({slave_count} slaves)"
+
+                # If single slave, also show entity shortcuts for convenience
+                if slave_count == 1:
+                    menu_options["add_entity"] = "Add entity (quick)"
+                    if self._entities:
+                        menu_options["list_entities"] = f"Entities ({len(self._entities)})"
+                        menu_options["edit_entity"] = "Edit entity (quick)"
             else:
                 # No slaves - backward compat mode
                 menu_options["add_entity"] = "Add entity"
@@ -128,7 +133,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             if self._entities:
                 menu_options["list_entities"] = f"Entities ({len(self._entities)})"
                 menu_options["edit_entity"] = "Edit entity"
-        
+
         # Template options (always available)
         menu_options.update({
             "load_template": "Load template",
