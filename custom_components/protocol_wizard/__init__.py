@@ -284,7 +284,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("Loading template '%s' for new device", template_name)
             await _load_template_into_options(hass, entry, protocol_name, template_name)
         
-            # mark as applied
+            # mark as applied - but reload entry first to get the updated options!
+            entry = hass.config_entries.async_get_entry(entry.entry_id)
             options = dict(entry.options)
             options[CONF_TEMPLATE_APPLIED] = True
             hass.config_entries.async_update_entry(entry, options=options)
@@ -525,14 +526,22 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Determine protocol and config key
             protocol = entry.data.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
-            if protocol == CONF_PROTOCOL_MODBUS:
-                config_key = CONF_REGISTERS
-            else:
-                config_key = CONF_ENTITIES
             
-            # Get current entities
+            # Get current entities based on protocol and structure
             current_options = dict(entry.options)
-            entities = list(current_options.get(config_key, []))
+            
+            if protocol == CONF_PROTOCOL_MODBUS:
+                # Check if we have slaves (new structure)
+                slaves = current_options.get(CONF_SLAVES, [])
+                if slaves:
+                    # Multi-slave: add to first slave's registers
+                    entities = list(slaves[0].get("registers", []))
+                else:
+                    # Old structure fallback
+                    entities = list(current_options.get(CONF_REGISTERS, []))
+            else:
+                # Non-Modbus protocols
+                entities = list(current_options.get(CONF_ENTITIES, []))
             
             # Build new entity config
             new_entity = {
@@ -569,7 +578,20 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             
             # Add the new entity
             entities.append(new_entity)
-            current_options[config_key] = entities
+            
+            # Save back to correct location
+            if protocol == CONF_PROTOCOL_MODBUS:
+                slaves = current_options.get(CONF_SLAVES, [])
+                if slaves:
+                    # Save to first slave's registers
+                    slaves[0]["registers"] = entities
+                    current_options[CONF_SLAVES] = slaves
+                else:
+                    # Old structure fallback
+                    current_options[CONF_REGISTERS] = entities
+            else:
+                # Non-Modbus protocols
+                current_options[CONF_ENTITIES] = entities
             
             # Update the config entry
             hass.config_entries.async_update_entry(entry, options=current_options)
