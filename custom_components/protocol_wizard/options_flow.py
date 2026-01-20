@@ -31,6 +31,7 @@ from .const import (
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
+    CONF_SLAVES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,13 +85,81 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             "export_template": "Export template",
             "delete_template": "Delete user template",
         }
+        if self.protocol == CONF_PROTOCOL_MODBUS:
+            slaves = self._config_entry.options.get(CONF_SLAVES, [])
+            if slaves:
+                menu_options["manage_slaves"] = f"Slaves ({len(slaves)})"
+            else:
+                menu_options["add_slave"] = "Add slave"
         if self._entities:
             menu_options["list_entities"] = f"Entities ({len(self._entities)})"
             menu_options["edit_entity"] = "Edit entity"
 
         return self.async_show_menu(step_id="init", menu_options=menu_options)
 
-
+    async def async_step_add_slave(self, user_input=None):
+        """Add a new slave to this connection."""
+        if user_input:
+            slaves = list(self._config_entry.options.get(CONF_SLAVES, []))
+            
+            # Check for duplicate slave_id
+            new_slave_id = user_input["slave_id"]
+            if any(s["slave_id"] == new_slave_id for s in slaves):
+                return self.async_show_form(
+                    step_id="add_slave",
+                    data_schema=self._slave_schema(),
+                    errors={"base": "duplicate_slave_id"}
+                )
+            
+            slaves.append({
+                "slave_id": user_input["slave_id"],
+                "name": user_input.get("name", f"Slave {user_input['slave_id']}")
+            })
+            
+            new_options = dict(self._config_entry.options)
+            new_options[CONF_SLAVES] = slaves
+            
+            return self.async_create_entry(title="", data=new_options)
+        
+        return self.async_show_form(
+            step_id="add_slave",
+            data_schema=self._slave_schema()
+        )
+    
+    def _slave_schema(self):
+        """Schema for adding a slave."""
+        return vol.Schema({
+            vol.Required("slave_id"): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+            vol.Optional("name"): str,
+        })
+    
+    async def async_step_manage_slaves(self, user_input=None):
+        """List and manage slaves."""
+        if user_input:
+            action = user_input.get("action")
+            if action == "add":
+                return await self.async_step_add_slave()
+            elif action.startswith("delete_"):
+                idx = int(action.split("_")[1])
+                slaves = list(self._config_entry.options.get(CONF_SLAVES, []))
+                slaves.pop(idx)
+                new_options = dict(self._config_entry.options)
+                new_options[CONF_SLAVES] = slaves
+                return self.async_create_entry(title="", data=new_options)
+        
+        slaves = self._config_entry.options.get(CONF_SLAVES, [])
+        
+        options = {"add": "Add new slave"}
+        for idx, slave in enumerate(slaves):
+            name = slave.get("name", f"Slave {slave['slave_id']}")
+            options[f"delete_{idx}"] = f"Delete: {name} (ID {slave['slave_id']})"
+        
+        return self.async_show_form(
+            step_id="manage_slaves",
+            data_schema=vol.Schema({
+                vol.Required("action"): vol.In(options)
+            })
+        )
     # ------------------------------------------------------------------
     # SETTINGS
     # ------------------------------------------------------------------
