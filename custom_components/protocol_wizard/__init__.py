@@ -142,7 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Get list of slaves (defaults to single slave from CONF_SLAVE_ID for backward compatibility)
             slaves = entry.options.get(CONF_SLAVES, [])
             
-            _LOGGER.info("[Modbus Setup] Entry: %s, has CONF_SLAVES: %s, count: %d", 
+            _LOGGER.error("========== NEW CODE RUNNING! Entry: %s, has CONF_SLAVES: %s, count: %d ==========", 
                         entry.title, slaves is not None and len(slaves) > 0, len(slaves) if slaves else 0)
             
             if not slaves:
@@ -151,13 +151,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Check if there are entities in the old location (backward compatibility)
                 old_registers = entry.options.get(CONF_REGISTERS, [])
                 
-                _LOGGER.info("[Modbus Migration] Migrating from old structure: slave_id=%d (from config.data), %d entities (from options.registers)", 
+                _LOGGER.error("========== MIGRATION STARTING: slave_id=%d, %d entities ==========", 
                              default_slave_id, len(old_registers))
+                
+                # Log first entity as example
+                if old_registers:
+                    first_entity = old_registers[0]
+                    _LOGGER.error("========== FIRST ENTITY: name=%s, address=%s, data_type=%s ==========", 
+                                first_entity.get("name"), first_entity.get("address"), 
+                                first_entity.get("data_type"))
                 
                 slaves = [{
                     "slave_id": default_slave_id, 
                     "name": entry.title or "Primary",
-                    "registers": old_registers  # Migrate old entities to slave
+                    "registers": old_registers  # Migrate old entities to slave AS-IS
                 }]
                 
                 # IMPORTANT: Save the migration to options so it persists
@@ -166,9 +173,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Remove old CONF_REGISTERS to complete migration
                 options.pop(CONF_REGISTERS, None)
                 hass.config_entries.async_update_entry(entry, options=options)
-                _LOGGER.info("[Modbus Migration] Migration saved to options")
+                _LOGGER.error("========== MIGRATION COMPLETE ==========")
             else:
-                _LOGGER.info("[Modbus Setup] Using existing slave structure with %d slaves", len(slaves))
+                _LOGGER.error("========== USING EXISTING SLAVES: %d slaves ==========", len(slaves))
             
             # Create a coordinator for each slave
             coordinators_created = []
