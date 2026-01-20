@@ -584,8 +584,15 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     slaves[self._selected_slave_index]['registers'] = self._entities
                     options[CONF_SLAVES] = slaves
             else:
-                # Backward compat: save to global CONF_REGISTERS
-                options[CONF_REGISTERS] = self._entities
+                # Check if we have slaves at all
+                slaves = list(options.get(CONF_SLAVES, []))
+                if slaves:
+                    # Single slave mode - save to first slave
+                    slaves[0]['registers'] = self._entities
+                    options[CONF_SLAVES] = slaves
+                else:
+                    # True backward compat: no slaves exist yet
+                    options[CONF_REGISTERS] = self._entities
         else:
             # Non-Modbus
             options[CONF_ENTITIES] = self._entities
