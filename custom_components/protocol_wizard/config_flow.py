@@ -74,10 +74,11 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """First step: protocol selection."""
         available_protocols = ProtocolRegistry.available_protocols()
-        await self.async_set_unique_id(user_input[CONF_HOST].lower())
-        self._abort_if_unique_id_configured()
         if user_input is not None:
             self._protocol = user_input.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
+            unique_id = f"{DOMAIN}_{user_input.get('device_id', 'default')}_{self._protocol}"
+            await self.async_set_unique_id(unique_id)
+            self._abort_if_unique_id_configured()
             
             if self._protocol == CONF_PROTOCOL_MODBUS:
                 return await self.async_step_modbus_common()
