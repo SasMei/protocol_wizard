@@ -1,5 +1,5 @@
 #------------------------------------------
-#-- base init.py protocol wizard - CORRECTED HUB/DEVICE LOGIC
+#-- base init.py protocol wizard
 #------------------------------------------
 """The Protocol Wizard integration."""
 import shutil
@@ -52,9 +52,6 @@ from .const import (
     CONF_TEMPLATE_APPLIED,
     CONF_ENTITIES,
     CONF_REGISTERS,
-    CONF_IS_HUB,
-    CONF_HUB_ID,
-    HUB_CLIENTS,
 )
 
 
@@ -120,11 +117,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].setdefault("connections", {})
     hass.data[DOMAIN].setdefault("coordinators", {})
-    hass.data[DOMAIN].setdefault(HUB_CLIENTS, {})  # NEW: Hub client registry
 
     config = entry.data
     ensure_user_template_dirs(hass)
-    
     # Determine protocol
     protocol_name = config.get(CONF_PROTOCOL)
     if protocol_name is None:
@@ -133,13 +128,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             protocol_name = CONF_PROTOCOL_MODBUS
         else:
             protocol_name = CONF_PROTOCOL_MODBUS
-    
-    # CORRECTED: Check if this is a hub or device
-    is_hub = entry.data.get(CONF_IS_HUB, False)
-    
-    # Handle Modbus Hub differently
-    if protocol_name == CONF_PROTOCOL_MODBUS and is_hub:
-        return await _setup_modbus_hub(hass, entry, config)
     
     # Get protocol-specific coordinator class
     CoordinatorClass = ProtocolRegistry.get_coordinator_class(protocol_name)
@@ -150,8 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create protocol-specific client
     try:
         if protocol_name == CONF_PROTOCOL_MODBUS:
-            # This is a device (slave) - get or create client
-            client = await _create_modbus_device_client(hass, config, entry)
+            client = await _create_modbus_client(hass, config, entry)
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
@@ -190,8 +177,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     
     hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+#    devicename = entry.data.get(CONF_NAME, f"{protocol_name.title()} Device")
     devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
-    
     # CREATE DEVICE REGISTRY ENTRY
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(
@@ -218,162 +205,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-# ============================================================================
-# NEW: MODBUS HUB SETUP
-# ============================================================================
-
-async def _setup_modbus_hub(hass: HomeAssistant, entry: ConfigEntry, config: dict) -> bool:
-    """Set up a Modbus Hub (shared connection only, no entities)."""
-    _LOGGER.info("Setting up Modbus Hub: %s", entry.title)
-    
-    # Create the shared pymodbus client
-    pymodbus_client = await _create_pymodbus_client(config)
-    
-    # Test connection
-    try:
-        await pymodbus_client.connect()
-        if not pymodbus_client.connected:
-            _LOGGER.error("Hub connection failed: %s", entry.title)
-            return False
-    except Exception as err:
-        _LOGGER.error("Hub connection error: %s", err)
-        return False
-    
-    # Store the shared client in hub registry
-    hass.data[DOMAIN][HUB_CLIENTS][entry.entry_id] = {
-        "client": pymodbus_client,
-        "entry": entry,
-    }
-    
-    _LOGGER.info("Modbus Hub '%s' ready - devices can now use this connection", entry.title)
-    
-    # Hubs don't create platforms - they just provide the connection
-    # No coordinator, no entities, no platforms for hubs!
-    
-    # Still register services and frontend
-    if not hass.data[DOMAIN].get("services_registered"):
-        await async_setup_services(hass)
-        hass.data[DOMAIN]["services_registered"] = True
-    
-    await async_install_frontend_resource(hass)
-    
-    return True
-
-
-async def _create_pymodbus_client(config: dict):
-    """Create raw pymodbus client from config."""
-    conn_type = config.get(CONF_CONNECTION_TYPE)
-    
-    if conn_type == CONNECTION_TYPE_SERIAL:
-        return AsyncModbusSerialClient(
-            port=config[CONF_SERIAL_PORT],
-            baudrate=int(config.get(CONF_BAUDRATE, DEFAULT_BAUDRATE)),
-            parity=config.get(CONF_PARITY, DEFAULT_PARITY),
-            stopbits=int(config.get(CONF_STOPBITS, DEFAULT_STOPBITS)),
-            bytesize=int(config.get(CONF_BYTESIZE, DEFAULT_BYTESIZE)),
-        )
-    elif conn_type == CONNECTION_TYPE_TCP:
-        return AsyncModbusTcpClient(
-            host=config[CONF_HOST],
-            port=int(config.get(CONF_PORT, 502)),
-        )
-    elif conn_type == CONNECTION_TYPE_UDP:
-        return AsyncModbusUdpClient(
-            host=config[CONF_HOST],
-            port=int(config.get(CONF_PORT, 502)),
-        )
-    else:
-        raise ValueError(f"Unknown connection type: {conn_type}")
-
-
-async def _create_modbus_device_client(hass: HomeAssistant, config: dict, entry: ConfigEntry):
-    """
-    Create ModbusClient for a device (slave).
-    
-    If device has hub_id, uses shared hub client.
-    Otherwise, creates standalone client (backward compatibility).
-    """
-    hub_id = config.get(CONF_HUB_ID)
-    slave_id = config.get(CONF_SLAVE_ID, 1)
-    
-    # NEW: Device references a hub
-    if hub_id:
-        _LOGGER.info("Creating device client for slave %d on hub %s", slave_id, hub_id)
-        
-        # Get hub's shared client
-        hub_data = hass.data[DOMAIN][HUB_CLIENTS].get(hub_id)
-        
-        if not hub_data:
-            _LOGGER.error("Hub %s not found for device %s", hub_id, entry.title)
-            raise ValueError(f"Hub {hub_id} not available")
-        
-        pymodbus_client = hub_data["client"]
-        
-        # Verify connection is still good
-        if not pymodbus_client.connected:
-            _LOGGER.info("Reconnecting hub for device %s", entry.title)
-            await pymodbus_client.connect()
-        
-        # Wrap shared client with device-specific slave_id
-        return ModbusClient(pymodbus_client, slave_id)
-    
-    # OLD: Standalone device (backward compatibility)
-    else:
-        _LOGGER.info("Creating standalone Modbus client for slave %d", slave_id)
-        pymodbus_client = await _create_pymodbus_client(config)
-        return ModbusClient(pymodbus_client, slave_id)
-
-
-# ============================================================================
-# EXISTING CLIENT CREATION FUNCTIONS (Keep for other protocols)
-# ============================================================================
-
-async def _create_modbus_client(hass, config, entry):
-    """DEPRECATED: Old method - kept for backward compatibility."""
-    # This is now handled by _create_modbus_device_client
-    return await _create_modbus_device_client(hass, config, entry)
-
-
-async def _create_modbus_hub(hass, config, entry):
-    """DEPRECATED: This had the logic backwards - keeping for reference."""
-    # The old code had this backwards - it was creating device clients in hub mode
-    # Now properly handled by _setup_modbus_hub and _create_modbus_device_client
-    _LOGGER.warning("_create_modbus_hub called - this should not happen with new logic")
-    return await _create_modbus_device_client(hass, config, entry)
-
-
-def _create_snmp_client(config):
-    """Create SNMP client."""
-    return SNMPClient(
-        host=config[CONF_HOST],
-        port=config.get(CONF_PORT, 161),
-        community=config.get("community", "public"),
-        version=config.get("version", "2c"),
-    )
-
-def _create_mqtt_client(config):
-    """Create MQTT client."""
-    return MQTTClient(
-        broker=config.get("broker"),
-        port=config.get(CONF_PORT, 1883),
-        username=config.get("username"),
-        password=config.get("password"),
-    )
-
-def _create_bacnet_client(config, hass):
-    """Create BACnet client."""
-    return BACnetClient(
-        hass=hass,
-        address=config.get("address"),
-        object_identifier=config.get("object_identifier"),
-        max_apdu_length=config.get("max_apdu_length", 1024),
-    )
-
-
-# ============================================================================
-# TEMPLATE LOADING (UNCHANGED)
-# ============================================================================
-
 async def _load_template_into_options(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -396,121 +227,299 @@ async def _load_template_into_options(
         # Update options with template entities
         new_options = dict(entry.options)
         new_options[config_key] = template_data
-        new_options[CONF_TEMPLATE] = template_name
         
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Loaded %d entities from template %s", len(template_data), template_name)
+        _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
     except Exception as err:
         _LOGGER.error("Failed to load template %s: %s", template_name, err)
 
 
-# ============================================================================
-# SERVICES (UNCHANGED - keeping all existing service handlers)
-# ============================================================================
+async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: ConfigEntry) -> ModbusClient:
+    """Create and cache Modbus client."""
+    connection_type = config.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_SERIAL)
+    protocol = config.get(CONF_PROTOCOL, CONNECTION_TYPE_TCP)
+    
+    # Create connection key for shared clients
+    if connection_type == CONNECTION_TYPE_SERIAL:
+        key = (
+            f"serial:"
+            f"{config[CONF_SERIAL_PORT]}:"
+            f"{config.get(CONF_BAUDRATE, DEFAULT_BAUDRATE)}:"
+            f"{config.get(CONF_PARITY, DEFAULT_PARITY)}:"
+            f"{config.get(CONF_STOPBITS, DEFAULT_STOPBITS)}:"
+            f"{config.get(CONF_BYTESIZE, DEFAULT_BYTESIZE)}"
+        )
+        
+        if key not in hass.data[DOMAIN]["connections"]:
+            _LOGGER.debug("Creating serial Modbus client")
+            hass.data[DOMAIN]["connections"][key] = AsyncModbusSerialClient(
+                port=config[CONF_SERIAL_PORT],
+                baudrate=config.get(CONF_BAUDRATE, DEFAULT_BAUDRATE),
+                parity=config.get(CONF_PARITY, DEFAULT_PARITY),
+                stopbits=config.get(CONF_STOPBITS, DEFAULT_STOPBITS),
+                bytesize=config.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
+                timeout=5,
+            )
+    elif connection_type == CONNECTION_TYPE_IP and protocol == CONNECTION_TYPE_UDP:
+        key = f"ip_udp:{config[CONF_HOST]}:{config[CONF_PORT]}"
+        
+        if key not in hass.data[DOMAIN]["connections"]:
+            _LOGGER.debug("Creating IP-UDP Modbus client")
+            hass.data[DOMAIN]["connections"][key] = AsyncModbusUdpClient(
+                host=config[CONF_HOST],
+                port=config[CONF_PORT],
+                timeout=5,
+            )
+    else:  # TCP
+        key = f"ip_tcp:{config[CONF_HOST]}:{config[CONF_PORT]}"
+        
+        if key not in hass.data[DOMAIN]["connections"]:
+            _LOGGER.debug("Creating IP-TCP Modbus client")
+            hass.data[DOMAIN]["connections"][key] = AsyncModbusTcpClient(
+                host=config[CONF_HOST],
+                port=config[CONF_PORT],
+                timeout=5,
+            )
+    
+    pymodbus_client = hass.data[DOMAIN]["connections"][key]
+    slave_id = int(config[CONF_SLAVE_ID])
+    
+    return ModbusClient(pymodbus_client, slave_id)
 
-async def async_setup_services(hass: HomeAssistant):
-    """Register Protocol Wizard services."""
+def _create_snmp_client(config: dict) -> SNMPClient:
+    """Create SNMP client (no caching needed - connectionless)."""
+    from .protocols.snmp import SNMPClient
+    
+    return SNMPClient(
+        host=config[CONF_HOST],
+        port=config.get(CONF_PORT, 161),
+        community=config.get("community", "public"),
+        version=config.get("version", "2c"),
+    )
+    
+def _create_mqtt_client(config: dict) -> MQTTClient:
+    """Create MQTT client (no caching needed - manages its own connection)."""
+    from .protocols.mqtt import MQTTClient, CONF_BROKER, CONF_USERNAME, CONF_PASSWORD, DEFAULT_PORT
+    
+    return MQTTClient(
+        broker=config[CONF_BROKER],
+        port=config.get(CONF_PORT, DEFAULT_PORT),
+        username=config.get(CONF_USERNAME) or None,
+        password=config.get(CONF_PASSWORD) or None,
+        timeout=10.0,
+    )
+    
+def _create_bacnet_client(config: dict, hass: HomeAssistant) -> BACnetClient:
+    """Create BACnet client (no caching needed - connectionless)."""
+    return BACnetClient(
+        host=config[CONF_HOST],
+        hass = hass,
+        device_id=config["device_id"],
+        port=config.get(CONF_PORT, 47808),
+        network_number=config.get("network_number")
+    )
+    
+async def async_setup_services(hass: HomeAssistant) -> None:
+    """Set up protocol-agnostic services."""
     
     def _get_coordinator(call: ServiceCall):
-        """Get coordinator from service call."""
-        entry_id = call.data.get("config_entry_id")
-        if not entry_id:
-            raise HomeAssistantError("config_entry_id is required")
-        
-        coordinator = hass.data[DOMAIN]["coordinators"].get(entry_id)
-        if not coordinator:
-            raise HomeAssistantError(f"No coordinator found for entry {entry_id}")
-        
-        return coordinator
+        # Priority 1: device_id from service data (sent by card)
+        device_id = call.data.get("device_id")
+        if device_id:
+            from homeassistant.helpers import device_registry as dr
+            dev_reg = dr.async_get(hass)
+            device = dev_reg.async_get(device_id)
+            if device:
+                # Find the config entry for this device that has a coordinator
+                for entry_id in device.config_entries:
+                    coordinator = hass.data[DOMAIN]["coordinators"].get(entry_id)
+                    if coordinator:
+                        _LOGGER.debug("Coordinator selected by device_id %s: protocol=%s, entry=%s",
+                                      device_id, coordinator.protocol_name, entry_id)
+                        return coordinator
+                raise HomeAssistantError(f"No active coordinator found for device {device_id}")
+    
+        # Priority 2: Fallback to entity_id (for legacy/UI calls without device_id)
+        entity_id = None
+        if "entity_id" in call.data:
+            entity_ids = call.data["entity_id"]
+            entity_id = entity_ids[0] if isinstance(entity_ids, list) else entity_ids
+        elif call.target and call.target.get("entity_id"):
+            entity_ids = call.target.get("entity_id")
+            entity_id = entity_ids[0] if isinstance(entity_ids, list) else entity_ids
+    
+        if entity_id:
+            from homeassistant.helpers import entity_registry as er
+            ent_reg = er.async_get(hass)
+            entity_entry = ent_reg.async_get(entity_id)
+            if entity_entry and entity_entry.config_entry_id:
+                entry_id = entity_entry.config_entry_id
+                coordinator = hass.data[DOMAIN]["coordinators"].get(entry_id)
+                if coordinator:
+                    _LOGGER.debug("Coordinator selected by entity_id %s: protocol=%s", entity_id, coordinator.protocol_name)
+                    return coordinator
+
+        raise HomeAssistantError("No coordinator found – provide device_id or valid entity_id")
+
+    async def handle_add_entity(call: ServiceCall):
+        """Service to add a new entity to the integration configuration."""
+        try:
+            # Get the config entry from target entity
+            entry_id = None
+            
+            # Get entity_id from target or from data (for frontend card compatibility)
+            entity_id = call.data.get("entity_id")
+            
+            if not entity_id and call.target:
+                entity_ids = call.target.get("entity_id")
+                if entity_ids:
+                    entity_id = entity_ids[0] if isinstance(entity_ids, list) else entity_ids
+            
+            if not entity_id:
+                raise HomeAssistantError("No target entity provided")
+            
+            # Get config entry from entity
+            entity_registry = er.async_get(hass)
+            entity_entry = entity_registry.async_get(entity_id)
+            if entity_entry and entity_entry.config_entry_id:
+                entry_id = entity_entry.config_entry_id
+            
+            if not entry_id:
+                raise HomeAssistantError("Could not find config entry for target entity")
+            
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if not entry or entry.domain != DOMAIN:
+                raise HomeAssistantError("Invalid config entry")
+            
+            # Determine protocol and config key
+            protocol = entry.data.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
+            if protocol == CONF_PROTOCOL_MODBUS:
+                config_key = CONF_REGISTERS
+            else:
+                config_key = CONF_ENTITIES
+            
+            # Get current entities
+            current_options = dict(entry.options)
+            entities = list(current_options.get(config_key, []))
+            
+            # Build new entity config
+            new_entity = {
+                "name": call.data["name"],
+                "address": str(call.data["address"]),
+                "data_type": call.data.get("data_type", "uint16"),
+                "rw": call.data.get("rw", "read"),
+                "scale": float(call.data.get("scale", 1.0)),
+                "offset": float(call.data.get("offset", 0.0)),
+            }
+            
+            # Add protocol-specific fields
+            if protocol == CONF_PROTOCOL_MODBUS:
+                new_entity.update({
+                    "register_type": call.data.get("register_type", "holding"),
+                    "byte_order": call.data.get("byte_order", "big"),
+                    "word_order": call.data.get("word_order", "big"),
+                    "size": int(call.data.get("size", 1)),
+                })
+            elif protocol == CONF_PROTOCOL_SNMP:
+                new_entity.update({
+                    "read_mode": call.data.get("read_mode", "get"),
+                })
+            
+            # Add optional fields if provided
+            for field in ["format", "options", "device_class", "state_class", "entity_category", "icon", "min", "max", "step"]:
+                if field in call.data and call.data[field]:
+                    new_entity[field] = call.data[field]
+            
+            # Check for duplicates
+            existing_addresses = {(e.get("name"), e.get("address")) for e in entities}
+            if (new_entity["name"], new_entity["address"]) in existing_addresses:
+                raise HomeAssistantError(f"Entity with name '{new_entity['name']}' and address '{new_entity['address']}' already exists")
+            
+            # Add the new entity
+            entities.append(new_entity)
+            current_options[config_key] = entities
+            
+            # Update the config entry
+            hass.config_entries.async_update_entry(entry, options=current_options)
+            
+            _LOGGER.info(
+                "Added new entity '%s' at address '%s' to %s",
+                new_entity["name"],
+                new_entity["address"],
+                entry.title
+            )
+            
+            return {
+                "success": True,
+                "entity_name": new_entity["name"],
+                "entity_count": len(entities)
+            }
+            
+        except Exception as err:
+            _LOGGER.error("Failed to add entity: %s", err, exc_info=True)
+            raise HomeAssistantError(f"Failed to add entity: {str(err)}") from err
     
     async def handle_write_register(call: ServiceCall):
-        """Handle write_register service call."""
+        """Generic write service (protocol-agnostic) with detailed logging."""
         coordinator = _get_coordinator(call)
-        
-        address = call.data["address"]
+    
+        address = str(call.data["address"])
         value = call.data["value"]
-        
         entity_config = {
-            "register_type": call.data.get("register_type", "holding"),
             "data_type": call.data.get("data_type", "uint16"),
+            "device_id": call.data.get("device_id", None),
+            "byte_order": call.data.get("byte_order", "big"),
             "word_order": call.data.get("word_order", "big"),
+            "register_type": call.data.get("register_type", "holding"),
+            "scale": call.data.get("scale", 1.0),
+            "offset": call.data.get("offset", 0.0)
         }
-        
-        _LOGGER.debug(
-            "write_register service: addr=%s, value=%r, type=%s",
-            address, value, entity_config["data_type"]
-        )
-        
-        success = await coordinator.async_write_entity(
-            address=str(address),
-            value=value,
-            entity_config=entity_config,
-        )
-        
-        if not success:
-            raise HomeAssistantError(f"Failed to write register at address {address}")
+    
+   #     _LOGGER.debug("write_register service called: address=%s, value=%r (type=%s), config=%s", address, value, type(value).__name__, entity_config)
+    
+        try:
+            success = await coordinator.async_write_entity(
+                address=address,
+                value=value,
+                entity_config=entity_config,
+                size=call.data.get("size"),
+            )
+    
+            if not success:
+                _LOGGER.error("Write failed for address %s with value %r – no specific error from coordinator", address, value)
+                raise HomeAssistantError(f"Write failed for address {address}")
+    
+        except Exception as err:
+            _LOGGER.error("Unexpected exception in write_register service for address %s: %s", address, err, exc_info=True)
+            raise HomeAssistantError(f"Write failed for address {address}: {str(err)}") from err
     
     async def handle_read_register(call: ServiceCall):
-        """Handle read_register service call."""
+        """Generic read service (protocol-agnostic)."""
         coordinator = _get_coordinator(call)
         
-        address = call.data["address"]
-        
         entity_config = {
-            "register_type": call.data.get("register_type", "holding"),
             "data_type": call.data.get("data_type", "uint16"),
+            "device_id": call.data.get("device_id", None),
+            "byte_order": call.data.get("byte_order", "big"),
             "word_order": call.data.get("word_order", "big"),
-        }
-        
-        kwargs = {
-            "size": call.data.get("size", 1),
-            "raw": call.data.get("raw", False),
+            "register_type": call.data.get("register_type", "holding"),
+            "scale": call.data.get("scale", 1.0),
+            "offset": call.data.get("offset", 0.0)
         }
         
         value = await coordinator.async_read_entity(
-            address=str(address),
+            address=str(call.data["address"]),
             entity_config=entity_config,
-            **kwargs
+            size=call.data.get("size", 1),
+            raw=call.data.get("raw", False)
         )
         
         if value is None:
-            raise HomeAssistantError(f"Failed to read register at address {address}")
+            raise HomeAssistantError(f"Failed to read address {call.data['address']}")
         
         return {"value": value}
     
-    async def handle_add_entity(call: ServiceCall):
-        """Handle add_entity service call."""
-        coordinator = _get_coordinator(call)
-        
-        entity_def = {
-            "name": call.data["name"],
-            "address": call.data["address"],
-            "entity_type": call.data.get("entity_type", "sensor"),
-            "register_type": call.data.get("register_type", "holding"),
-            "data_type": call.data.get("data_type", "uint16"),
-            "unit": call.data.get("unit"),
-            "device_class": call.data.get("device_class"),
-            "state_class": call.data.get("state_class"),
-            "scale": call.data.get("scale", 1.0),
-            "offset": call.data.get("offset", 0.0),
-            "word_order": call.data.get("word_order", "big"),
-        }
-        
-        protocol = coordinator.config_entry.data.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
-        config_key = "registers" if protocol == CONF_PROTOCOL_MODBUS else "entities"
-        
-        options = dict(coordinator.config_entry.options)
-        entities = options.get(config_key, [])
-        entities.append(entity_def)
-        options[config_key] = entities
-        
-        hass.config_entries.async_update_entry(coordinator.config_entry, options=options)
-        
-        await hass.config_entries.async_reload(coordinator.config_entry.entry_id)
-        
-        _LOGGER.info("Added entity %s to %s", entity_def["name"], coordinator.config_entry.title)
-
     async def handle_read_snmp(call: ServiceCall):
         """SNMP read service."""
         coordinator = _get_coordinator(call)
@@ -522,7 +531,7 @@ async def async_setup_services(hass: HomeAssistant):
         entity_config = {
             "data_type": call.data.get("data_type", "string"),
             "device_id": call.data.get("device_id", None),
-            "address": oid,
+            "address": oid,  # SNMP uses OID as address
         }
         
         value = await coordinator.async_read_entity(
@@ -575,7 +584,7 @@ async def async_setup_services(hass: HomeAssistant):
         wait_time = call.data.get("wait_time", 5.0)
         
         entity_config = {
-            "data_type": "string",
+            "data_type": "string",  # Default to string
         }
         
         value = await coordinator.async_read_entity(
@@ -659,7 +668,7 @@ async def async_setup_services(hass: HomeAssistant):
             "address": address,
             "data_type": call.data.get("data_type", "float"),
             "device_id": call.data.get("device_id", None),
-            "priority": call.data.get("priority", 8),
+            "priority": call.data.get("priority", 8),  # BACnet write priority
             "device_instance" : device_instance
         }
         
@@ -679,9 +688,7 @@ async def async_setup_services(hass: HomeAssistant):
         if not success:
             _LOGGER.error(f"Failed to write to BACnet address {address}")
         
-        return {"success": True}
-        
-    # Register all services
+        return {"success": True}    
     hass.services.async_register(DOMAIN, "write_register", handle_write_register)
     hass.services.async_register(
         DOMAIN,
@@ -723,22 +730,10 @@ async def async_setup_services(hass: HomeAssistant):
         "write_bacnet",
         handle_write_bacnet,
     )
-
-
-# ============================================================================
-# UNLOAD (MODIFIED to handle hubs)
-# ============================================================================
     
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     
-    # Check if this is a hub
-    is_hub = entry.data.get(CONF_IS_HUB, False)
-    
-    if is_hub:
-        return await _unload_modbus_hub(hass, entry)
-    
-    # Regular device/protocol unload
     coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
     
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -748,54 +743,15 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Close connection if unused
     if coordinator:
         client = coordinator.client
-        
-        # Check if this device was using a hub
-        hub_id = entry.data.get(CONF_HUB_ID)
-        if hub_id:
-            # Device was using shared hub - don't disconnect
-            _LOGGER.info("Device %s unloaded (hub connection remains)", entry.title)
-        else:
-            # Standalone device - check if client is still used elsewhere
-            still_used = any(
-                c.client is client
-                for c in hass.data[DOMAIN]["coordinators"].values()
-            )
-            
-            if not still_used:
-                try:
-                    await client.disconnect()
-                    _LOGGER.info("Closed standalone connection for %s", entry.title)
-                except Exception as err:
-                    _LOGGER.debug("Error closing client: %s", err)
-    
-    return True
-
-
-async def _unload_modbus_hub(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a Modbus hub."""
-    hub_id = entry.entry_id
-    
-    # Check if any devices are still using this hub
-    devices_on_hub = [
-        e for e in hass.config_entries.async_entries(DOMAIN)
-        if e.data.get(CONF_HUB_ID) == hub_id
-    ]
-    
-    if devices_on_hub:
-        _LOGGER.error(
-            "Cannot unload hub %s - %d device(s) still using it: %s",
-            entry.title,
-            len(devices_on_hub),
-            [d.title for d in devices_on_hub]
+        still_used = any(
+            c.client is client
+            for c in hass.data[DOMAIN]["coordinators"].values()
         )
-        return False
-    
-    # Close the shared client
-    hub_data = hass.data[DOMAIN][HUB_CLIENTS].pop(hub_id, None)
-    if hub_data:
-        client = hub_data["client"]
-        if client.connected:
-            client.close()
-            _LOGGER.info("Closed hub connection: %s", entry.title)
+        
+        if not still_used:
+            try:
+                await client.disconnect()
+            except Exception as err:
+                _LOGGER.debug("Error closing client: %s", err)
     
     return True
