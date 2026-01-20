@@ -150,28 +150,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 default_slave_id = config.get(CONF_SLAVE_ID, 1)
                 # Check if there are entities in the old location (backward compatibility)
                 old_registers = entry.options.get(CONF_REGISTERS, [])
-                
-                _LOGGER.error("========== MIGRATION STARTING: slave_id=%d, %d entities ==========", 
-                             default_slave_id, len(old_registers))
-                
+
+                # Check if there's a pending template from config_flow
+                pending_template = entry.options.get(CONF_TEMPLATE)
+
+                _LOGGER.error("========== MIGRATION STARTING: slave_id=%d, %d entities, template=%s ==========",
+                             default_slave_id, len(old_registers), pending_template or "None")
+
                 # Log first entity as example
                 if old_registers:
                     first_entity = old_registers[0]
-                    _LOGGER.error("========== FIRST ENTITY: name=%s, address=%s, data_type=%s ==========", 
-                                first_entity.get("name"), first_entity.get("address"), 
+                    _LOGGER.error("========== FIRST ENTITY: name=%s, address=%s, data_type=%s ==========",
+                                first_entity.get("name"), first_entity.get("address"),
                                 first_entity.get("data_type"))
-                
-                slaves = [{
-                    "slave_id": default_slave_id, 
+
+                # Build slave structure
+                slave_data = {
+                    "slave_id": default_slave_id,
                     "name": entry.title or "Primary",
                     "registers": old_registers  # Migrate old entities to slave AS-IS
-                }]
-                
+                }
+
+                # CRITICAL FIX: Copy pending template to slave so it gets loaded
+                if pending_template:
+                    slave_data["template"] = pending_template
+                    _LOGGER.info("Migrating template '%s' to slave structure", pending_template)
+
+                slaves = [slave_data]
+
                 # IMPORTANT: Save the migration to options so it persists
                 options = dict(entry.options)
                 options[CONF_SLAVES] = slaves
-                # Remove old CONF_REGISTERS to complete migration
+                # Remove old CONF_REGISTERS and CONF_TEMPLATE (moved to slave) to complete migration
                 options.pop(CONF_REGISTERS, None)
+                options.pop(CONF_TEMPLATE, None)
                 hass.config_entries.async_update_entry(entry, options=options)
                 _LOGGER.error("========== MIGRATION COMPLETE ==========")
             else:
