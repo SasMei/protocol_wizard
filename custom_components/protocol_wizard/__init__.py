@@ -339,15 +339,28 @@ async def _load_template_into_options(
             _LOGGER.warning("Template %s is empty", template_name)
             return
         
-        # Determine config key
-        config_key = "registers" if protocol == CONF_PROTOCOL_MODBUS else "entities"
-        
         # Update options with template entities
         new_options = dict(entry.options)
-        new_options[config_key] = template_data
+        
+        if protocol == CONF_PROTOCOL_MODBUS:
+            # For Modbus, check if we have slave structure
+            slaves = new_options.get(CONF_SLAVES, [])
+            if slaves:
+                # Put entities into first slave's registers
+                slaves[0]["registers"] = template_data
+                new_options[CONF_SLAVES] = slaves
+                _LOGGER.info("Loaded %d entities from template '%s' into slave %d", 
+                            len(template_data), template_name, slaves[0]["slave_id"])
+            else:
+                # Fallback to old structure (shouldn't happen after migration)
+                new_options[CONF_REGISTERS] = template_data
+                _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
+        else:
+            # Non-Modbus protocols use CONF_ENTITIES
+            new_options[CONF_ENTITIES] = template_data
+            _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
         hass.config_entries.async_update_entry(entry, options=new_options)
-        _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
     except Exception as err:
         _LOGGER.error("Failed to load template %s: %s", template_name, err)
