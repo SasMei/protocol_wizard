@@ -18,6 +18,7 @@ try:
     from bacpypes3.basetypes import PropertyIdentifier
     from bacpypes3.pdu import Address, LocalBroadcast
 #    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
+    import ipaddress
     HAS_BACPYPES3 = True
 except ImportError:
     HAS_BACPYPES3 = False
@@ -47,23 +48,46 @@ async def get_my_lan_ip_and_subnet(hass):
     Prioritizes default interface, then private LAN ranges (192.168.*, 10.*, 172.*).
     """
     summary = await get_my_network_summary(hass)
-    
+
     if not summary:
         return None, None
-    
+
     # 1. Prefer default interface
     for entry in summary:
         if entry["default"]:
             return entry["ip"], entry["prefix"]
-    
+
     # 2. Fallback: first private LAN IP
     for entry in summary:
         ip = entry["ip"]
         if ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
             return entry["ip"], entry["prefix"]
-    
+
     # 3. Last resort: first IP
     return summary[0]["ip"], summary[0]["prefix"]
+
+
+def calculate_broadcast_address(ip_with_subnet):
+    """
+    Calculate broadcast address from IP/subnet (e.g. "192.168.1.185/24" -> "192.168.1.255")
+    Returns tuple of (ip, subnet_mask, broadcast_address)
+    """
+    try:
+        network = ipaddress.IPv4Network(ip_with_subnet, strict=False)
+        ip = str(network.network_address + 1) if str(network.network_address).endswith('.0') else ip_with_subnet.split('/')[0]
+        broadcast = str(network.broadcast_address)
+        netmask = str(network.netmask)
+
+        _LOGGER.info("Calculated network info:")
+        _LOGGER.info("  IP: %s", ip)
+        _LOGGER.info("  Network: %s", network.network_address)
+        _LOGGER.info("  Netmask: %s", netmask)
+        _LOGGER.info("  Broadcast: %s", broadcast)
+
+        return ip, netmask, broadcast
+    except Exception as e:
+        _LOGGER.error("Failed to calculate broadcast address from %s: %s", ip_with_subnet, e)
+        return None, None, None
     
 
 
@@ -111,6 +135,8 @@ class BACnetClient:
                 import random
         
                 source_ip = address_adapter = ip_to_use = self.host
+                broadcast_addr = None
+
                 try:
                     address_adapter = await get_my_lan_ip_and_subnet(hass)
                 except Exception as err:
@@ -119,14 +145,28 @@ class BACnetClient:
                     source_ip = await async_get_source_ip(hass)
                 except Exception as err:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
+
                 if self.host == "0.0.0.0": # we want a broadcast one, so let's use that one.
                     ip_to_use = self.host
+                    _LOGGER.info("Using 0.0.0.0 for broadcast discovery (all interfaces)")
                 elif address_adapter[0]: # we want an IP address but probably from a client, let's use our own (HA client) with right subnet
-                    ip_to_use = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
+                    ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
+                    ip_to_use = ip_with_subnet
+
+                    # Calculate broadcast address for diagnostics
+                    ip, netmask, broadcast = calculate_broadcast_address(ip_with_subnet)
+                    if broadcast:
+                        broadcast_addr = broadcast
+                        _LOGGER.info("Calculated broadcast address: %s", broadcast_addr)
+
                 elif source_ip:  # we want an IP address but probably from a client, let's use the fallback if previous one not working.. but lacks subnet!
                     ip_to_use = source_ip
-                _LOGGER.debug("IP address we are using for BACnet: %s",  ip_to_use)
-                _LOGGER.debug("IP address available %s", address_adapter )
+                    _LOGGER.warning("Using source_ip without subnet: %s (broadcast may not work!)", source_ip)
+
+                _LOGGER.info("BACnet binding to address: %s",  ip_to_use)
+                _LOGGER.debug("IP address available: %s", address_adapter)
+                if broadcast_addr:
+                    _LOGGER.info("Expected broadcast address: %s", broadcast_addr)
                 # Create a proper Namespace with required arguments
                 # CRITICAL: Specify the correct network address to use
                 # Use the actual HA IP address on the correct subnet
@@ -155,11 +195,11 @@ class BACnetClient:
                 
                 # from_args is synchronous, not async!
                 theApp = Application.from_args(args)
-                
+
                 _LOGGER.info("BACnet application initialized successfully!")
                 _LOGGER.info("Has elementService: %s", hasattr(theApp, 'elementService'))
-                
-                # Log network configuration
+
+                # DIAGNOSTIC: Check socket configuration
                 if hasattr(theApp, 'link_layers'):
                     _LOGGER.info("Link layers: %s", theApp.link_layers)
                     for port_id, link_layer in theApp.link_layers.items():
@@ -167,6 +207,24 @@ class BACnetClient:
                             _LOGGER.info("  Link layer %s address: %s", port_id, link_layer.address)
                         if hasattr(link_layer, 'broadcast'):
                             _LOGGER.info("  Link layer %s broadcast: %s", port_id, link_layer.broadcast)
+
+                        # CRITICAL: Check if socket is configured for broadcasting
+                        if hasattr(link_layer, 'annexJ') and hasattr(link_layer.annexJ, 'protocol'):
+                            protocol = link_layer.annexJ.protocol
+                            _LOGGER.info("  Link layer %s protocol: %s", port_id, protocol)
+                            if hasattr(protocol, 'transport'):
+                                transport = protocol.transport
+                                _LOGGER.info("  Transport: %s", transport)
+                                if hasattr(transport, '_sock'):
+                                    sock = transport._sock
+                                    _LOGGER.info("  Socket: %s", sock)
+                                    # Check SO_BROADCAST option
+                                    try:
+                                        import socket
+                                        broadcast_enabled = sock.getsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST)
+                                        _LOGGER.info("  SO_BROADCAST enabled: %s", broadcast_enabled)
+                                    except Exception as e:
+                                        _LOGGER.warning("  Could not check SO_BROADCAST: %s", e)
                 
                 return theApp
                 
@@ -272,8 +330,21 @@ class BACnetClient:
                 else:
                     # Broadcast Who-Is
                     _LOGGER.info("Sending broadcast Who-Is (no specific target)")
+
+                    # DIAGNOSTIC: Log broadcast address details
+                    local_broadcast = LocalBroadcast()
+                    _LOGGER.info("LocalBroadcast object: %s", local_broadcast)
+                    _LOGGER.info("LocalBroadcast type: %s", type(local_broadcast))
+
+                    # Check if link layer has broadcast address
+                    if hasattr(self.app, 'link_layers'):
+                        for port_id, link_layer in self.app.link_layers.items():
+                            if hasattr(link_layer, 'broadcast'):
+                                _LOGGER.info("Using broadcast address from link layer %s: %s",
+                                           port_id, link_layer.broadcast)
+
                     await self.app.who_is(address=LocalBroadcast())
-                    _LOGGER.info("Broadcast Who-Is sent")
+                    _LOGGER.info("Broadcast Who-Is sent (LocalBroadcast)")
                 
                 _LOGGER.info("Who-Is sent successfully")
                 
