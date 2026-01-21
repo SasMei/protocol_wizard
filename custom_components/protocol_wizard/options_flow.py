@@ -16,7 +16,7 @@ from .template_utils import (
     delete_template,
 )
 from homeassistant import config_entries
-from homeassistant.helpers import selector
+from homeassistant.helpers import selector, device_registry as dr
 #import asyncio
 from .const import (
     DOMAIN,
@@ -31,6 +31,7 @@ from .const import (
     CONF_BYTE_ORDER,
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
+    CONF_SLAVES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,19 +49,41 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         self.protocol = config_entry.data.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
 
         self.schema_handler = self._get_schema_handler()
+        
+        # NEW: Track which slave we're configuring (for Modbus multi-slave)
+        self._selected_slave_index: int | None = None
 
-        # Determine the correct config key based on protocol
-        if self.protocol == CONF_PROTOCOL_MODBUS:
-            config_key = CONF_REGISTERS
-        else:
-            config_key = CONF_ENTITIES  # Future-proof for other protocols
-            
-        self._entities: list[dict] = list(config_entry.options.get(config_key, []))
+        # Load entities based on context
+        self._entities: list[dict] = self._load_entities_for_context()
         self._edit_index: int | None = None
 
     @property
     def config_entry(self) -> config_entries.ConfigEntry:
         return self._config_entry
+    
+    def _load_entities_for_context(self) -> list[dict]:
+        """Load entities based on current context (slave or global)."""
+        if self.protocol == CONF_PROTOCOL_MODBUS:
+            # Check if we're in slave context
+            if self._selected_slave_index is not None:
+                slaves = self._config_entry.options.get(CONF_SLAVES, [])
+                if slaves and self._selected_slave_index < len(slaves):
+                    return list(slaves[self._selected_slave_index].get('registers', []))
+            # Check if we have slaves (multi-slave mode)
+            slaves = self._config_entry.options.get(CONF_SLAVES, [])
+            if slaves and len(slaves) > 0:
+                # Multi-slave mode but no specific slave selected
+                # Check if this is a migrated single-slave (backward compat)
+                if len(slaves) == 1:
+                    # Single slave - load its entities
+                    return list(slaves[0].get('registers', []))
+                # Multiple slaves - return empty, user must select a slave
+                return []
+            # No slaves yet - backward compat mode
+            return list(self._config_entry.options.get(CONF_REGISTERS, []))
+        else:
+            # Non-Modbus protocols
+            return list(self._config_entry.options.get(CONF_ENTITIES, []))
         
     @staticmethod
     def _export_schema():
@@ -79,18 +102,196 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         menu_options = {
             "settings": "Settings",
-            "add_entity": "Add entity",
+        }
+
+        # For Modbus with slaves structure, show slave selection
+        if self.protocol == CONF_PROTOCOL_MODBUS:
+            slaves = self._config_entry.options.get(CONF_SLAVES, [])
+            if slaves:
+                # Show slave management menu (allows adding more slaves)
+                slave_count = len(slaves)
+                if slave_count == 1:
+                    menu_options["select_slave"] = f"⚙️ Manage Slaves (1 slave, add more)"
+                else:
+                    menu_options["select_slave"] = f"⚙️ Manage Slaves ({slave_count} slaves)"
+
+                # If single slave, also show entity shortcuts for convenience
+                if slave_count == 1:
+                    menu_options["add_entity"] = "Add entity (quick)"
+                    if self._entities:
+                        menu_options["list_entities"] = f"Entities ({len(self._entities)})"
+                        menu_options["edit_entity"] = "Edit entity (quick)"
+            else:
+                # No slaves - backward compat mode
+                menu_options["add_entity"] = "Add entity"
+                if self._entities:
+                    menu_options["list_entities"] = f"Entities ({len(self._entities)})"
+                    menu_options["edit_entity"] = "Edit entity"
+        else:
+            # Non-Modbus: normal entity management
+            menu_options["add_entity"] = "Add entity"
+            if self._entities:
+                menu_options["list_entities"] = f"Entities ({len(self._entities)})"
+                menu_options["edit_entity"] = "Edit entity"
+
+        # Template options (always available)
+        menu_options.update({
             "load_template": "Load template",
             "export_template": "Export template",
             "delete_template": "Delete user template",
-        }
-        if self._entities:
-            menu_options["list_entities"] = f"Entities ({len(self._entities)})"
-            menu_options["edit_entity"] = "Edit entity"
+        })
 
         return self.async_show_menu(step_id="init", menu_options=menu_options)
 
+    async def async_step_select_slave(self, user_input=None):
+        """Select which slave to configure."""
+        if user_input:
+            action = user_input.get("action")
+            
+            if action == "add_slave":
+                return await self.async_step_add_slave()
+            elif action.startswith("configure_"):
+                # Extract slave index
+                idx = int(action.split("_")[1])
+                self._selected_slave_index = idx
+                self._entities = self._load_entities_for_context()
+                return await self.async_step_slave_menu()
+            elif action.startswith("delete_"):
+                # Delete slave
+                idx = int(action.split("_")[1])
+                slaves = list(self._config_entry.options.get(CONF_SLAVES, []))
+                if idx < len(slaves):
+                    deleted = slaves.pop(idx)
+                    deleted_slave_id = deleted.get('slave_id')
 
+                    # Clean up device registry entry for this slave
+                    device_registry = dr.async_get(self.hass)
+                    coordinator_key = f"{self._config_entry.entry_id}_slave_{deleted_slave_id}"
+                    device = device_registry.async_get_device(identifiers={(DOMAIN, coordinator_key)})
+                    if device:
+                        device_registry.async_remove_device(device.id)
+                        _LOGGER.info("Removed device for slave %d from device registry", deleted_slave_id)
+
+                    options = dict(self._config_entry.options)
+                    options[CONF_SLAVES] = slaves
+                    self.hass.config_entries.async_update_entry(self._config_entry, options=options)
+                    await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+                    _LOGGER.info("Deleted slave: %s", deleted.get('name'))
+                return await self.async_step_init()
+        
+        slaves = self._config_entry.options.get(CONF_SLAVES, [])
+        
+        options = {"add_slave": "➕ Add New Slave"}
+        for idx, slave in enumerate(slaves):
+            name = slave.get('name', f"Slave {slave['slave_id']}")
+            slave_id = slave['slave_id']
+            entity_count = len(slave.get('registers', []))
+            options[f"configure_{idx}"] = f"⚙️ {name} (ID {slave_id}) - {entity_count} entities"
+            options[f"delete_{idx}"] = f"🗑️ Delete: {name} (ID {slave_id})"
+        
+        return self.async_show_form(
+            step_id="select_slave",
+            data_schema=vol.Schema({
+                vol.Required("action"): vol.In(options)
+            }),
+            description_placeholders={
+                "info": "Select a slave to configure its entities, or add a new slave"
+            }
+        )
+    
+    async def async_step_slave_menu(self, user_input=None):
+        """Menu for managing a specific slave's entities."""
+        if self._selected_slave_index is None:
+            return await self.async_step_init()
+        
+        slaves = self._config_entry.options.get(CONF_SLAVES, [])
+        if not slaves or self._selected_slave_index >= len(slaves):
+            return await self.async_step_init()
+        
+        slave = slaves[self._selected_slave_index]
+        slave_name = slave.get('name', f"Slave {slave['slave_id']}")
+        
+        menu_options = {
+            "add_entity": "Add entity",
+            "load_template": "Load template for this slave",
+        }
+        
+        if self._entities:
+            menu_options["list_entities"] = f"Entities ({len(self._entities)})"
+            menu_options["edit_entity"] = "Edit entity"
+        
+        menu_options["back"] = "← Back to slave list"
+        
+        return self.async_show_menu(
+            step_id="slave_menu",
+            menu_options=menu_options,
+        )
+
+    async def async_step_back(self, user_input=None):
+        """Go back to main menu."""
+        # Clear slave selection
+        self._selected_slave_index = None
+        self._entities = self._load_entities_for_context()
+        return await self.async_step_init()
+
+    async def async_step_add_slave(self, user_input=None):
+        """Add a new slave to this connection."""
+        errors = {}
+        
+        if user_input:
+            slaves = list(self._config_entry.options.get(CONF_SLAVES, []))
+            
+            # Check for duplicate slave_id
+            new_slave_id = user_input["slave_id"]
+            if any(s["slave_id"] == new_slave_id for s in slaves):
+                errors["base"] = "duplicate_slave_id"
+            else:
+                # Build new slave entry
+                new_slave = {
+                    "slave_id": new_slave_id,
+                    "name": user_input.get("name", f"Slave {new_slave_id}"),
+                    "registers": []  # Start with empty entity list
+                }
+                
+                # Handle template if selected
+                template_name = user_input.get("template")
+                if template_name and template_name != "none":
+                    new_slave["template"] = template_name
+                    # Template will be loaded on next integration reload by __init__.py
+                
+                slaves.append(new_slave)
+                
+                new_options = dict(self._config_entry.options)
+                new_options[CONF_SLAVES] = slaves
+                
+                self.hass.config_entries.async_update_entry(self._config_entry, options=new_options)
+                
+                # Reload to apply
+                await self.hass.config_entries.async_reload(self._config_entry.entry_id)
+                
+                return await self.async_step_init()
+        
+        # Get available templates
+        templates = await get_available_templates(self.hass, self.protocol)
+        template_choices = {"none": "No template (add entities manually)"}
+        template_choices.update(get_template_dropdown_choices(templates))
+        
+        schema_dict = {
+            vol.Required("slave_id"): vol.All(vol.Coerce(int), vol.Range(min=1, max=247)),
+            vol.Optional("name"): str,
+        }
+        
+        if templates:
+            schema_dict[vol.Optional("template", default="none")] = vol.In(template_choices)
+        
+        return self.async_show_form(
+            step_id="add_slave",
+            data_schema=vol.Schema(schema_dict),
+            errors=errors,
+            description_placeholders={
+                "info": "Add a new Modbus slave device. Optionally select a template to pre-configure entities."
+            }
+        )
     # ------------------------------------------------------------------
     # SETTINGS
     # ------------------------------------------------------------------
@@ -129,6 +330,9 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input:
+            # Reload entities to get current state
+            self._entities = self._load_entities_for_context()
+            
             processed = self.schema_handler.process_input(user_input, errors, existing=None)
             if processed and not errors:
                 self._entities.append(processed)
@@ -287,6 +491,10 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"base": "template_not_found"},
                 )
             
+            # IMPORTANT: Reload entities from current config state
+            # (migration may have run since __init__)
+            self._entities = self._load_entities_for_context()
+            
             added = self.schema_handler.merge_template(self._entities, entities)
             
             if added == 0:
@@ -388,10 +596,29 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
 
     def _save_entities(self):
         options = dict(self._config_entry.options)
-        config_key = CONF_REGISTERS if self.protocol == CONF_PROTOCOL_MODBUS else CONF_ENTITIES
-        options[config_key] = self._entities
-        # it says Async.. but is actually not? It returns a bool stating nothing changed but it has...
-        # anyway we changed this 20 times. It should stay as it is!
+        
+        if self.protocol == CONF_PROTOCOL_MODBUS:
+            # Check if we're in slave context
+            if self._selected_slave_index is not None:
+                # Save to specific slave's registers
+                slaves = list(options.get(CONF_SLAVES, []))
+                if slaves and self._selected_slave_index < len(slaves):
+                    slaves[self._selected_slave_index]['registers'] = self._entities
+                    options[CONF_SLAVES] = slaves
+            else:
+                # Check if we have slaves at all
+                slaves = list(options.get(CONF_SLAVES, []))
+                if slaves:
+                    # Single slave mode - save to first slave
+                    slaves[0]['registers'] = self._entities
+                    options[CONF_SLAVES] = slaves
+                else:
+                    # True backward compat: no slaves exist yet
+                    options[CONF_REGISTERS] = self._entities
+        else:
+            # Non-Modbus
+            options[CONF_ENTITIES] = self._entities
+        
         # Update entry (synchronous)
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
         
