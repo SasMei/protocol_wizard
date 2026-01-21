@@ -74,6 +74,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """First step: protocol selection."""
         available_protocols = ProtocolRegistry.available_protocols()
+
         if user_input is not None:
             self._protocol = user_input.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
             unique_id = f"{DOMAIN}_{user_input.get('device_id', 'default')}_{self._protocol}"
@@ -246,7 +247,12 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_STOPBITS: user_input[CONF_STOPBITS],
                     CONF_BYTESIZE: user_input[CONF_BYTESIZE],
                 }
-                
+
+                # Set unique ID for serial connection
+                unique_id = f"modbus_serial_{final_data[CONF_SERIAL_PORT]}_{final_data[CONF_SLAVE_ID]}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+
                 await self._async_test_modbus_connection(final_data)
                 
                 # Create entry with template in options if selected
@@ -294,6 +300,11 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_PORT: user_input[CONF_PORT],
                     CONF_IP: user_input[CONF_IP],
                 }
+
+                # Set unique ID for IP connection
+                unique_id = f"modbus_ip_{final_data[CONF_HOST]}_{final_data[CONF_PORT]}_{final_data[CONF_SLAVE_ID]}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
 
                 await self._async_test_modbus_connection(final_data)
                 
