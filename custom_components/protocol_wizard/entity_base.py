@@ -26,6 +26,7 @@ from .const import (
     CONF_PROTOCOL_MQTT,
     CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
+    CONF_SLAVES,
 )
 from .protocols.base import BaseProtocolCoordinator
 
@@ -187,10 +188,40 @@ class BaseEntityManager(ABC):
     async def sync_entities(self) -> None:
         """Create, update, and remove entities based on current config."""
         config_key = self._get_entities_config_key()
-        current_configs = self.entry.options.get(config_key, [])
+
+        # For Modbus, check if we have the new CONF_SLAVES structure
+        protocol = self.entry.data.get(CONF_PROTOCOL, CONF_PROTOCOL_MODBUS)
+        if protocol == CONF_PROTOCOL_MODBUS:
+            slaves = self.entry.options.get(CONF_SLAVES, [])
+            if slaves:
+                # Multi-slave mode: get entities from coordinator's slave
+                # The coordinator has slave_id and slave_index attributes set
+                if hasattr(self.coordinator, 'slave_index'):
+                    slave_index = self.coordinator.slave_index
+                    if slave_index < len(slaves):
+                        current_configs = slaves[slave_index].get('registers', [])
+                        _LOGGER.debug("Reading entities from slave %d (index %d): %d entities",
+                                     self.coordinator.slave_id, slave_index, len(current_configs))
+                    else:
+                        _LOGGER.warning("Slave index %d out of range (total slaves: %d)",
+                                       slave_index, len(slaves))
+                        current_configs = []
+                else:
+                    # Single slave mode (backward compatibility)
+                    current_configs = slaves[0].get('registers', [])
+                    _LOGGER.debug("Reading entities from single slave: %d entities", len(current_configs))
+            else:
+                # Old structure fallback
+                current_configs = self.entry.options.get(config_key, [])
+                _LOGGER.debug("Reading entities from old structure (%s): %d entities",
+                             config_key, len(current_configs))
+        else:
+            # Non-Modbus protocols use the config key directly
+            current_configs = self.entry.options.get(config_key, [])
+
         desired_ids = set()
         new_entities: list[Entity] = []
-        
+
         for config in current_configs:
             if not self._should_create_entity(config):
                 continue

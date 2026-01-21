@@ -50,6 +50,7 @@ CONF_PROTOCOL_BACNET = "bacnet"
 CONF_PROTOCOL_KNX = "knx"
 CONF_PROTOCOL = "protocol"
 CONF_IP = "IP"
+CONF_SLAVES = "slaves"
 
 # Defaults
 DEFAULT_SLAVE_ID = 1

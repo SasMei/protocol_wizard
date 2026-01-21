@@ -49,8 +49,11 @@ async def async_setup_entry(
     """Set up switch entities."""
     coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
 
+    # Use coordinator_key if available (multi-slave), otherwise use entry.entry_id
+    device_identifier = getattr(coordinator, 'coordinator_key', entry.entry_id)
+
     device_info = DeviceInfo(
-        identifiers={(DOMAIN, entry.entry_id)},
+        identifiers={(DOMAIN, device_identifier)},
         name=entry.title or f"{coordinator.protocol_name.title()} Device",
         manufacturer=coordinator.protocol_name.title(),
         model="Protocol Wizard",
