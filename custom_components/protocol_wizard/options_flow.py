@@ -16,7 +16,7 @@ from .template_utils import (
     delete_template,
 )
 from homeassistant import config_entries
-from homeassistant.helpers import selector
+from homeassistant.helpers import selector, device_registry as dr
 #import asyncio
 from .const import (
     DOMAIN,
@@ -162,6 +162,16 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 slaves = list(self._config_entry.options.get(CONF_SLAVES, []))
                 if idx < len(slaves):
                     deleted = slaves.pop(idx)
+                    deleted_slave_id = deleted.get('slave_id')
+
+                    # Clean up device registry entry for this slave
+                    device_registry = dr.async_get(self.hass)
+                    coordinator_key = f"{self._config_entry.entry_id}_slave_{deleted_slave_id}"
+                    device = device_registry.async_get_device(identifiers={(DOMAIN, coordinator_key)})
+                    if device:
+                        device_registry.async_remove_device(device.id)
+                        _LOGGER.info("Removed device for slave %d from device registry", deleted_slave_id)
+
                     options = dict(self._config_entry.options)
                     options[CONF_SLAVES] = slaves
                     self.hass.config_entries.async_update_entry(self._config_entry, options=options)
