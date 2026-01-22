@@ -578,9 +578,10 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         discovered_devices = []
         
+        discovery_client = None
         try:
             from .protocols.bacnet.client import BACnetClient
-            
+
             # Create temporary client for discovery
             discovery_client = BACnetClient(
                 self.hass,
@@ -588,14 +589,14 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device_id=None,   # Discovery mode
                 port=47808
             )
-            
+
             # Run discovery (with timeout)
             _LOGGER.info("Starting BACnet device discovery...")
             discovered = await asyncio.wait_for(
                 discovery_client.discover_devices(timeout=10),
                 timeout=15  # Increased from 12 to allow for 10s wait + 0.5s sleep + collection + overhead
             )
-            
+
             if discovered:
                 # Format discovered devices for dropdown
                 for device in discovered:
@@ -604,18 +605,26 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "value": label,
                         "label": label
                     })
-                
+
                 _LOGGER.info("Discovered %d BACnet devices", len(discovered_devices))
             else:
                 _LOGGER.warning("No BACnet devices discovered")
                 errors["base"] = "no_devices_found"
-        
+
         except asyncio.TimeoutError:
             _LOGGER.error("BACnet discovery timed out")
             errors["base"] = "discovery_timeout"
         except Exception as err:
             _LOGGER.error("BACnet discovery failed: %s", err)
             errors["base"] = "discovery_failed"
+        finally:
+            # Clean up discovery client to free port
+            if discovery_client:
+                try:
+                    await discovery_client.disconnect()
+                    _LOGGER.info("Discovery client disconnected")
+                except Exception as err:
+                    _LOGGER.warning("Error disconnecting discovery client: %s", err)
         
         # If no devices found or error, show option to go manual
         if not discovered_devices or errors:
