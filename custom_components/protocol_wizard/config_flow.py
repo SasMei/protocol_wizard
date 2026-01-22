@@ -593,7 +593,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.info("Starting BACnet device discovery...")
             discovered = await asyncio.wait_for(
                 discovery_client.discover_devices(timeout=10),
-                timeout=12
+                timeout=15  # Increased from 12 to allow for 10s wait + 0.5s sleep + collection + overhead
             )
             
             if discovered:
@@ -626,7 +626,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }),
                 errors=errors,
                 description_placeholders={
-                    "message": "No devices found. Enable retry or use manual entry."
+                    "count": "0"  # Provide count for translation string
                 }
             )
         
