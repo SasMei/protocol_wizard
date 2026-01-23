@@ -552,17 +552,27 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(self.hass, host, device_id, port)
                     
                     if await client.connect():
+                        # New structure: Store as BACnet Network with one device
+                        device_config = {
+                            "device_id": device_id,
+                            "address": host,
+                            "port": port,
+                            "name": f"BACnet Device {device_id}",
+                            "entities": [],
+                            "template_applied": False
+                        }
+
                         return self.async_create_entry(
-                            title=f"BACnet Device {device_id} ({host})",
+                            title=f"BACnet Network ({host})",
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                                CONF_NAME: f"BACnet Device {device_id}",
-                                CONF_HOST: host,
-                                CONF_PORT: port,
-                                "device_id": device_id,
+                                CONF_NAME: f"BACnet Network",
+                                CONF_PORT: port,  # Default port for network
                                 "network_number": None,  # Local network
                             },
-                            options={},
+                            options={
+                                "bacnet_devices": [device_config]
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -678,18 +688,29 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(self.hass, host, device_id, port, network_number)
                     
                     if await client.connect():
-                        title = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+                        device_name = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+
+                        # New structure: Store as BACnet Network with one device
+                        device_config = {
+                            "device_id": device_id,
+                            "address": host,
+                            "port": port,
+                            "name": device_name,
+                            "entities": [],
+                            "template_applied": False
+                        }
+
                         return self.async_create_entry(
-                            title=title,
+                            title=f"BACnet Network ({host})",
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                                CONF_NAME: title,
-                                CONF_HOST: host,
-                                CONF_PORT: port,
-                                "device_id": device_id,
+                                CONF_NAME: "BACnet Network",
+                                CONF_PORT: port,  # Default port for network
                                 "network_number": network_number,
                             },
-                            options={},
+                            options={
+                                "bacnet_devices": [device_config]
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"

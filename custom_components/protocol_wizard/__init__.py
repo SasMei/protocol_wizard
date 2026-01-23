@@ -53,6 +53,7 @@ from .const import (
     CONF_ENTITIES,
     CONF_REGISTERS,
     CONF_SLAVES,
+    CONF_BACNET_DEVICES,
 )
 
 
@@ -270,22 +271,131 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             
             # Platforms (forward to all platforms once for all slaves)
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-            
+
+        elif protocol_name == CONF_PROTOCOL_BACNET:
+            # BACnet multi-device handling (similar to Modbus multi-slave)
+            bacnet_devices = entry.options.get(CONF_BACNET_DEVICES, [])
+
+            _LOGGER.info("[BACnet Setup] Entry: %s, has %d devices",
+                        entry.title, len(bacnet_devices))
+
+            if not bacnet_devices:
+                _LOGGER.error("No BACnet devices configured - skipping")
+                return False
+
+            # Create ONE client/Application for the entire network
+            # Use first device's settings as defaults, but client serves all devices
+            first_device = bacnet_devices[0]
+            bacnet_client = BACnetClient(
+                hass=hass,
+                host=first_device["address"],  # Initial address for Application binding
+                device_id=None,  # Will target specific devices per coordinator
+                port=config.get(CONF_PORT, 47808),
+                network_number=config.get("network_number")
+            )
+
+            # Connect the shared Application
+            if not await bacnet_client.connect():
+                _LOGGER.error("Failed to connect BACnet Application")
+                return False
+
+            # Create a coordinator for each BACnet device
+            coordinators_created = []
+            from .protocols.bacnet.coordinator import BACnetCoordinator
+
+            for idx, device_info in enumerate(bacnet_devices):
+                device_id = device_info["device_id"]
+                device_name = device_info.get("name", f"BACnet Device {device_id}")
+                device_address = device_info["address"]
+
+                _LOGGER.info("[BACnet Setup] Creating coordinator for device %d (%s) at %s, %d entities",
+                            device_id, device_name, device_address, len(device_info.get('entities', [])))
+
+                # Create device-specific client wrapper (shares Application, targets specific device)
+                device_client = BACnetClient(
+                    hass=hass,
+                    host=device_address,
+                    device_id=device_id,
+                    port=device_info.get("port", 47808),
+                    network_number=config.get("network_number")
+                )
+                # Share the Application from main client
+                device_client.app = bacnet_client.app
+                device_client._connected = True
+
+                update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
+
+                coordinator = BACnetCoordinator(
+                    hass=hass,
+                    client=device_client,
+                    config_entry=entry,
+                    update_interval=timedelta(seconds=update_interval),
+                )
+
+                # Store device index for entity lookupcoordinator.device_index = idx
+
+                # Handle template loading
+                template_name = device_info.get("template")
+                if template_name and not device_info.get("template_applied"):
+                    _LOGGER.info("Loading template '%s' for BACnet device %d", template_name, device_id)
+                    template_entities = await load_template(hass, CONF_PROTOCOL_BACNET, template_name)
+                    if template_entities:
+                        device_info["entities"] = template_entities
+                        device_info["template_applied"] = True
+
+                        # Save back to options
+                        options = dict(entry.options)
+                        options[CONF_BACNET_DEVICES] = bacnet_devices
+                        hass.config_entries.async_update_entry(entry, options=options)
+
+                await coordinator.async_config_entry_first_refresh()
+
+                # Consistent coordinator_key format (like Modbus)
+                coordinator_key = f"{entry.entry_id}_bacnet_{device_id}"
+                coordinator.coordinator_key = coordinator_key
+
+                hass.data[DOMAIN]["coordinators"][coordinator_key] = coordinator
+
+                # BACKWARD COMPAT: Also store first device with entry.entry_id
+                if idx == 0:
+                    hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+
+                coordinators_created.append((coordinator_key, device_name, device_id))
+
+            # Create device registry entries for each BACnet device
+            device_registry = dr.async_get(hass)
+            devicename = entry.title or entry.data.get(CONF_NAME) or "BACnet Network"
+
+            for coordinator_key, device_name, device_id in coordinators_created:
+                display_name = devicename
+                if len(bacnet_devices) > 1:
+                    display_name = f"{devicename} - {device_name}"
+
+                device_registry.async_get_or_create(
+                    config_entry_id=entry.entry_id,
+                    identifiers={(DOMAIN, coordinator_key)},
+                    name=display_name,
+                    manufacturer="BACnet",
+                    model=f"BACnet Device {device_id}",
+                    configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+                )
+
+            # Forward to platforms
+            await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
             client = _create_mqtt_client(config)
-        elif protocol_name == CONF_PROTOCOL_BACNET:
-            client = _create_bacnet_client(config, hass)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
     except Exception as err:
         _LOGGER.error("Failed to create client for %s: %s", protocol_name, err)
         return False
-    
-    # For non-Modbus protocols, create single coordinator
-    if protocol_name != CONF_PROTOCOL_MODBUS:
+
+    # For non-Modbus, non-BACnet protocols, create single coordinator
+    if protocol_name not in (CONF_PROTOCOL_MODBUS, CONF_PROTOCOL_BACNET):
         # Create coordinator
         update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
         
