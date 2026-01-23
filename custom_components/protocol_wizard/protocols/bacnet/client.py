@@ -18,7 +18,6 @@ try:
     from bacpypes3.basetypes import PropertyIdentifier
     from bacpypes3.pdu import Address, LocalBroadcast
 #    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
-    import ipaddress
     HAS_BACPYPES3 = True
 except ImportError:
     HAS_BACPYPES3 = False
@@ -67,30 +66,6 @@ async def get_my_lan_ip_and_subnet(hass):
     return summary[0]["ip"], summary[0]["prefix"]
 
 
-def calculate_broadcast_address(ip_with_subnet):
-    """
-    Calculate broadcast address from IP/subnet (e.g. "192.168.1.185/24" -> "192.168.1.255")
-    Returns tuple of (ip, subnet_mask, broadcast_address)
-    """
-    try:
-        network = ipaddress.IPv4Network(ip_with_subnet, strict=False)
-        ip = str(network.network_address + 1) if str(network.network_address).endswith('.0') else ip_with_subnet.split('/')[0]
-        broadcast = str(network.broadcast_address)
-        netmask = str(network.netmask)
-
-        _LOGGER.info("Calculated network info:")
-        _LOGGER.info("  IP: %s", ip)
-        _LOGGER.info("  Network: %s", network.network_address)
-        _LOGGER.info("  Netmask: %s", netmask)
-        _LOGGER.info("  Broadcast: %s", broadcast)
-
-        return ip, netmask, broadcast
-    except Exception as e:
-        _LOGGER.error("Failed to calculate broadcast address from %s: %s", ip_with_subnet, e)
-        return None, None, None
-    
-
-
 
 class BACnetClientApp(Application):
     """BACnet client application following bacpypes3 patterns."""
@@ -135,7 +110,6 @@ class BACnetClient:
                 import random
         
                 source_ip = address_adapter = ip_to_use = self.host
-                broadcast_addr = None
 
                 try:
                     address_adapter = await get_my_lan_ip_and_subnet(hass)
@@ -146,32 +120,13 @@ class BACnetClient:
                 except Exception as err:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
 
-                if self.host == "0.0.0.0": # Discovery mode - use actual IP
-                    # CRITICAL FIX: Don't use 0.0.0.0 - bacpypes3 can't calculate broadcast!
-                    # Use the actual HA IP address with subnet instead
-                    if address_adapter and address_adapter[0]:
-                        ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}"
-                        ip_to_use = ip_with_subnet
-                        _LOGGER.info("Discovery mode: Using actual IP %s instead of 0.0.0.0 (bacpypes3 requirement)", ip_to_use)
-
-                        # Calculate broadcast address
-                        ip, netmask, broadcast = calculate_broadcast_address(ip_with_subnet)
-                        if broadcast:
-                            broadcast_addr = broadcast
-                            _LOGGER.info("Calculated broadcast address: %s", broadcast_addr)
-                    else:
-                        _LOGGER.error("Cannot use 0.0.0.0 - no network adapter found!")
-                        raise ValueError("Discovery requires valid network interface")
-
+                if self.host == "0.0.0.0": # we want a broadcast one, so let's use that one.
+                    ip_to_use = self.host
+                    _LOGGER.info("Using 0.0.0.0 for broadcast discovery (all interfaces)")
                 elif address_adapter[0]: # we want an IP address but probably from a client, let's use our own (HA client) with right subnet
                     ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
                     ip_to_use = ip_with_subnet
-
-                    # Calculate broadcast address for diagnostics
-                    ip, netmask, broadcast = calculate_broadcast_address(ip_with_subnet)
-                    if broadcast:
-                        broadcast_addr = broadcast
-                        _LOGGER.info("Calculated broadcast address: %s", broadcast_addr)
+                    _LOGGER.info("Using HA IP %s for device communication", ip_to_use)
 
                 elif source_ip:  # we want an IP address but probably from a client, let's use the fallback if previous one not working.. but lacks subnet!
                     ip_to_use = source_ip
@@ -180,8 +135,7 @@ class BACnetClient:
                 _LOGGER.info("BACnet binding to address: %s",  ip_to_use)
                 _LOGGER.info("Device target address: %s (self.host preserved)", self.host)
                 _LOGGER.debug("IP address available: %s", address_adapter)
-                if broadcast_addr:
-                    _LOGGER.info("Expected broadcast address: %s", broadcast_addr)
+
                 # Create a proper Namespace with required arguments
                 # CRITICAL: Specify the correct network address to use
                 # Use the actual HA IP address on the correct subnet
