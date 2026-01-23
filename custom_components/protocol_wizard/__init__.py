@@ -280,6 +280,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.info("[BACnet Setup] Entry: %s, has %d devices",
                         entry.title, len(bacnet_devices))
 
+            # DEBUG: Log the full structure
+            _LOGGER.error("[BACnet DEBUG] Full bacnet_devices structure: %s", bacnet_devices)
+            _LOGGER.error("[BACnet DEBUG] entry.options keys: %s", list(entry.options.keys()))
+            if bacnet_devices:
+                _LOGGER.error("[BACnet DEBUG] First device entities count: %d", len(bacnet_devices[0].get("entities", [])))
+                _LOGGER.error("[BACnet DEBUG] First device full data: %s", bacnet_devices[0])
+
             if not bacnet_devices:
                 _LOGGER.error("No BACnet devices configured - skipping")
                 return False
@@ -472,16 +479,20 @@ async def _load_template_into_options(
         elif protocol == CONF_PROTOCOL_BACNET:
             # For BACnet, check if we have device structure
             bacnet_devices = new_options.get(CONF_BACNET_DEVICES, [])
+            _LOGGER.error("[Template Load DEBUG] BACnet devices before: %s", bacnet_devices)
             if bacnet_devices:
                 # Put entities into first device's entities
                 bacnet_devices[0]["entities"] = template_data
                 new_options[CONF_BACNET_DEVICES] = bacnet_devices
                 _LOGGER.info("Loaded %d entities from template '%s' into BACnet device %d",
                             len(template_data), template_name, bacnet_devices[0]["device_id"])
+                _LOGGER.error("[Template Load DEBUG] BACnet devices after: %s", bacnet_devices)
+                _LOGGER.error("[Template Load DEBUG] new_options keys: %s", list(new_options.keys()))
             else:
                 # Fallback to old structure (shouldn't happen after migration)
                 new_options[CONF_ENTITIES] = template_data
                 _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
+                _LOGGER.error("[Template Load DEBUG] Using old structure fallback!")
         else:
             # Other protocols (SNMP, MQTT, etc.) use CONF_ENTITIES
             new_options[CONF_ENTITIES] = template_data
