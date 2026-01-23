@@ -295,9 +295,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
             # Connect the shared Application
-            if not await bacnet_client.connect():
-                _LOGGER.error("Failed to connect BACnet Application")
-                return False
+            try:
+                if not await bacnet_client.connect():
+                    _LOGGER.error("Failed to connect BACnet Application")
+                    return False
+            except OSError as err:
+                if err.errno == 98:  # Address already in use
+                    _LOGGER.error("Port 47808 is already in use! This usually means:")
+                    _LOGGER.error("  1. Another BACnet integration entry is still loading")
+                    _LOGGER.error("  2. A previous entry wasn't cleaned up properly")
+                    _LOGGER.error("  3. Another application is using port 47808")
+                    _LOGGER.error("Solution: Restart Home Assistant to clear all BACnet connections")
+                    return False
+                raise
+
+            # CRITICAL: Store the main client for cleanup on unload
+            # Store with a special key to distinguish from device coordinators
+            hass.data[DOMAIN][f"{entry.entry_id}_bacnet_main_client"] = bacnet_client
+            _LOGGER.info("[BACnet Setup] Stored main Application for cleanup")
 
             # Create a coordinator for each BACnet device
             coordinators_created = []
@@ -1014,25 +1029,82 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    
-    coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
-    
+
+    protocol = entry.data.get(CONF_PROTOCOL)
+
+    # For BACnet and Modbus multi-device, clean up all coordinators
+    if protocol == CONF_PROTOCOL_BACNET:
+        _LOGGER.info("[BACnet Unload] Cleaning up BACnet network entry")
+
+        # Clean up the main BACnet Application
+        main_client_key = f"{entry.entry_id}_bacnet_main_client"
+        main_client = hass.data[DOMAIN].pop(main_client_key, None)
+        if main_client:
+            try:
+                _LOGGER.info("[BACnet Unload] Disconnecting main BACnet Application")
+                await main_client.disconnect()
+            except Exception as err:
+                _LOGGER.error("[BACnet Unload] Error closing main BACnet Application: %s", err)
+
+        # Clean up device coordinators
+        coordinators_to_remove = [
+            key for key in hass.data[DOMAIN]["coordinators"]
+            if key.startswith(f"{entry.entry_id}_bacnet_")
+        ]
+
+        for coord_key in coordinators_to_remove:
+            coordinator = hass.data[DOMAIN]["coordinators"].pop(coord_key, None)
+            _LOGGER.info("[BACnet Unload] Removed coordinator: %s", coord_key)
+
+        # Also remove backward-compat entry
+        hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+
+    elif protocol == CONF_PROTOCOL_MODBUS:
+        # Clean up Modbus multi-slave coordinators
+        coordinators_to_remove = [
+            key for key in hass.data[DOMAIN]["coordinators"]
+            if key.startswith(f"{entry.entry_id}_slave_")
+        ]
+
+        for coord_key in coordinators_to_remove:
+            hass.data[DOMAIN]["coordinators"].pop(coord_key, None)
+
+        # Also remove backward-compat entry
+        coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+
+        # Close Modbus client if unused
+        if coordinator:
+            client = coordinator.client
+            still_used = any(
+                c.client is client
+                for c in hass.data[DOMAIN]["coordinators"].values()
+            )
+
+            if not still_used:
+                try:
+                    await client.disconnect()
+                except Exception as err:
+                    _LOGGER.debug("Error closing Modbus client: %s", err)
+    else:
+        # Other protocols (SNMP, MQTT, etc.)
+        coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+
+        # Close connection if unused
+        if coordinator:
+            client = coordinator.client
+            still_used = any(
+                c.client is client
+                for c in hass.data[DOMAIN]["coordinators"].values()
+            )
+
+            if not still_used:
+                try:
+                    await client.disconnect()
+                except Exception as err:
+                    _LOGGER.debug("Error closing client: %s", err)
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:
         return False
-    
-    # Close connection if unused
-    if coordinator:
-        client = coordinator.client
-        still_used = any(
-            c.client is client
-            for c in hass.data[DOMAIN]["coordinators"].values()
-        )
-        
-        if not still_used:
-            try:
-                await client.disconnect()
-            except Exception as err:
-                _LOGGER.debug("Error closing client: %s", err)
-    
+
     return True
