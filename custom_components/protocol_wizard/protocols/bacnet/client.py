@@ -178,6 +178,7 @@ class BACnetClient:
                     _LOGGER.warning("Using source_ip without subnet: %s (broadcast may not work!)", source_ip)
 
                 _LOGGER.info("BACnet binding to address: %s",  ip_to_use)
+                _LOGGER.info("Device target address: %s (self.host preserved)", self.host)
                 _LOGGER.debug("IP address available: %s", address_adapter)
                 if broadcast_addr:
                     _LOGGER.info("Expected broadcast address: %s", broadcast_addr)
@@ -204,11 +205,18 @@ class BACnetClient:
                     route_aware=None,
                 )
                 
-                _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s", 
+                _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s",
                             args.instance, args.address)
-                
+
                 # from_args is synchronous, not async!
-                theApp = Application.from_args(args)
+                try:
+                    theApp = Application.from_args(args)
+                except Exception as init_err:
+                    _LOGGER.error("Failed to create Application: %s", init_err)
+                    _LOGGER.error("This might indicate port %s is already in use", self.port)
+                    import traceback
+                    traceback.print_exc()
+                    raise
 
                 _LOGGER.info("BACnet application initialized successfully!")
                 _LOGGER.info("Has elementService: %s", hasattr(theApp, 'elementService'))
@@ -550,24 +558,33 @@ class BACnetClient:
     
     
     async def read_property(
-        self, 
-        object_type: str, 
-        object_instance: int, 
+        self,
+        object_type: str,
+        object_instance: int,
         property_name: str
     ) -> Optional[Any]:
         """Read BACnet property."""
         if not self._connected or not self.app:
             _LOGGER.error("Not connected to BACnet network")
             return None
-        
+
         try:
             object_id = ObjectIdentifier(f"{object_type},{object_instance}")
             device_address = Address(f"{self.host}:{self.port}")
             prop_id = PropertyIdentifier(property_name)
-            
-            _LOGGER.debug("Reading %s from %s at %s", 
+
+            _LOGGER.debug("Reading %s from %s at %s",
                          property_name, object_id, device_address)
-            
+
+            # Log Application binding info for diagnostics
+            if hasattr(self.app, 'link_layers'):
+                for port_id, link_layer in self.app.link_layers.items():
+                    if hasattr(link_layer, 'address'):
+                        _LOGGER.debug("Application bound to: %s", link_layer.address)
+
+            _LOGGER.debug("Sending read request to device at: %s", device_address)
+            _LOGGER.debug("Request details - objid: %s, prop: %s", object_id, prop_id)
+
             # Add timeout to prevent hanging forever
             try:
                 result = await asyncio.wait_for(
@@ -578,16 +595,23 @@ class BACnetClient:
                     ),
                     timeout=5.0  # 5 second timeout
                 )
-                
+
                 _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
                 return result
-                
+
             except asyncio.TimeoutError:
                 _LOGGER.error("Read timed out after 5 seconds - no response from %s", device_address)
-                _LOGGER.error("This means:")
+                _LOGGER.error("Application details:")
+                _LOGGER.error("  self.host (device IP): %s", self.host)
+                _LOGGER.error("  self.device_id: %s", self.device_id)
+                if hasattr(self.app, 'link_layers'):
+                    for port_id, link_layer in self.app.link_layers.items():
+                        if hasattr(link_layer, 'address'):
+                            _LOGGER.error("  Application bound to: %s", link_layer.address)
+                _LOGGER.error("Possible causes:")
                 _LOGGER.error("  1. Device is not responding")
                 _LOGGER.error("  2. Network/firewall is blocking BACnet traffic")
-                _LOGGER.error("  3. Device is on different subnet")
+                _LOGGER.error("  3. Wrong device address or port")
                 return None
         
         except Exception as err:
@@ -677,8 +701,13 @@ class BACnetClient:
                     _LOGGER.info("BACnet Application stopped")
                 else:
                     _LOGGER.info("No explicit close/stop method - clearing references")
+
+                # Give the OS time to release the socket
+                await asyncio.sleep(0.1)
             except Exception as err:
                 _LOGGER.warning("Error closing BACnet Application: %s", err)
+                import traceback
+                traceback.print_exc()
 
         self.app = None
         self._bacpypeinstance = None
