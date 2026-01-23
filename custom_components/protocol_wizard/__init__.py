@@ -273,7 +273,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
         elif protocol_name == CONF_PROTOCOL_BACNET:
-            # BACnet multi-device handling (similar to Modbus multi-slave)
+            # BACnet handling - for now, support single device per entry
+            # Data structure supports multiple devices for future expansion
             bacnet_devices = entry.options.get(CONF_BACNET_DEVICES, [])
 
             _LOGGER.info("[BACnet Setup] Entry: %s, has %d devices",
@@ -283,21 +284,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 _LOGGER.error("No BACnet devices configured - skipping")
                 return False
 
-            # Create ONE client/Application for the entire network
-            # Use first device's settings as defaults, but client serves all devices
-            first_device = bacnet_devices[0]
+            # For now, only support first device (future: loop through all)
+            # This keeps it simple and avoids Application sharing issues
+            device_info = bacnet_devices[0]
+            device_id = device_info["device_id"]
+            device_name = device_info.get("name", f"BACnet Device {device_id}")
+            device_address = device_info["address"]
+
+            _LOGGER.info("[BACnet Setup] Creating client for device %d (%s) at %s, %d entities",
+                        device_id, device_name, device_address, len(device_info.get('entities', [])))
+
+            # Create simple BACnetClient (what worked before!)
+            # One client per entry, no sharing, no complexity
             bacnet_client = BACnetClient(
                 hass=hass,
-                host=first_device["address"],  # Initial address for Application binding
-                device_id=None,  # Will target specific devices per coordinator
-                port=config.get(CONF_PORT, 47808),
+                host=device_address,
+                device_id=device_id,
+                port=device_info.get("port", 47808),
                 network_number=config.get("network_number")
             )
 
-            # Connect the shared Application
+            # Connect the client
             try:
                 if not await bacnet_client.connect():
-                    _LOGGER.error("Failed to connect BACnet Application")
+                    _LOGGER.error("Failed to connect to BACnet device %d at %s", device_id, device_address)
                     return False
             except OSError as err:
                 if err.errno == 98:  # Address already in use
@@ -309,91 +319,51 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return False
                 raise
 
-            # CRITICAL: Store the main client for cleanup on unload
-            # Store with a special key to distinguish from device coordinators
-            hass.data[DOMAIN][f"{entry.entry_id}_bacnet_main_client"] = bacnet_client
-            _LOGGER.info("[BACnet Setup] Stored main Application for cleanup")
-
-            # Create a coordinator for each BACnet device
-            coordinators_created = []
             from .protocols.bacnet.coordinator import BACnetCoordinator
 
-            for idx, device_info in enumerate(bacnet_devices):
-                device_id = device_info["device_id"]
-                device_name = device_info.get("name", f"BACnet Device {device_id}")
-                device_address = device_info["address"]
+            update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
 
-                _LOGGER.info("[BACnet Setup] Creating coordinator for device %d (%s) at %s, %d entities",
-                            device_id, device_name, device_address, len(device_info.get('entities', [])))
+            coordinator = BACnetCoordinator(
+                hass=hass,
+                client=bacnet_client,
+                config_entry=entry,
+                update_interval=timedelta(seconds=update_interval),
+            )
 
-                # Create device-specific client wrapper (shares Application, targets specific device)
-                device_client = BACnetClient(
-                    hass=hass,
-                    host=device_address,
-                    device_id=device_id,
-                    port=device_info.get("port", 47808),
-                    network_number=config.get("network_number")
-                )
-                # Share the Application from main client
-                device_client.app = bacnet_client.app
-                device_client._connected = True
+            # Store device index for entity lookup (always 0 for single device)
+            coordinator.device_index = 0
 
-                update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
+            # Handle template loading
+            template_name = device_info.get("template")
+            if template_name and not device_info.get("template_applied"):
+                _LOGGER.info("Loading template '%s' for BACnet device %d", template_name, device_id)
+                template_entities = await load_template(hass, CONF_PROTOCOL_BACNET, template_name)
+                if template_entities:
+                    device_info["entities"] = template_entities
+                    device_info["template_applied"] = True
 
-                coordinator = BACnetCoordinator(
-                    hass=hass,
-                    client=device_client,
-                    config_entry=entry,
-                    update_interval=timedelta(seconds=update_interval),
-                )
+                    # Save back to options
+                    options = dict(entry.options)
+                    options[CONF_BACNET_DEVICES] = bacnet_devices
+                    hass.config_entries.async_update_entry(entry, options=options)
 
-                # Store device index for entity lookupcoordinator.device_index = idx
+            await coordinator.async_config_entry_first_refresh()
 
-                # Handle template loading
-                template_name = device_info.get("template")
-                if template_name and not device_info.get("template_applied"):
-                    _LOGGER.info("Loading template '%s' for BACnet device %d", template_name, device_id)
-                    template_entities = await load_template(hass, CONF_PROTOCOL_BACNET, template_name)
-                    if template_entities:
-                        device_info["entities"] = template_entities
-                        device_info["template_applied"] = True
+            # Store coordinator with entry_id (simple, like other protocols)
+            hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
 
-                        # Save back to options
-                        options = dict(entry.options)
-                        options[CONF_BACNET_DEVICES] = bacnet_devices
-                        hass.config_entries.async_update_entry(entry, options=options)
+            devicename = entry.title or entry.data.get(CONF_NAME) or "BACnet Device"
 
-                await coordinator.async_config_entry_first_refresh()
-
-                # Consistent coordinator_key format (like Modbus)
-                coordinator_key = f"{entry.entry_id}_bacnet_{device_id}"
-                coordinator.coordinator_key = coordinator_key
-
-                hass.data[DOMAIN]["coordinators"][coordinator_key] = coordinator
-
-                # BACKWARD COMPAT: Also store first device with entry.entry_id
-                if idx == 0:
-                    hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
-
-                coordinators_created.append((coordinator_key, device_name, device_id))
-
-            # Create device registry entries for each BACnet device
+            # Create device registry entry
             device_registry = dr.async_get(hass)
-            devicename = entry.title or entry.data.get(CONF_NAME) or "BACnet Network"
-
-            for coordinator_key, device_name, device_id in coordinators_created:
-                display_name = devicename
-                if len(bacnet_devices) > 1:
-                    display_name = f"{devicename} - {device_name}"
-
-                device_registry.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    identifiers={(DOMAIN, coordinator_key)},
-                    name=display_name,
-                    manufacturer="BACnet",
-                    model=f"BACnet Device {device_id}",
-                    configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
-                )
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(DOMAIN, entry.entry_id)},
+                name=devicename,
+                manufacturer="BACnet",
+                model=f"BACnet Device {device_id}",
+                configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+            )
 
             # Forward to platforms
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -1045,34 +1015,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     protocol = entry.data.get(CONF_PROTOCOL)
 
-    # For BACnet and Modbus multi-device, clean up all coordinators
-    if protocol == CONF_PROTOCOL_BACNET:
-        _LOGGER.info("[BACnet Unload] Cleaning up BACnet network entry")
-
-        # Clean up the main BACnet Application
-        main_client_key = f"{entry.entry_id}_bacnet_main_client"
-        main_client = hass.data[DOMAIN].pop(main_client_key, None)
-        if main_client:
-            try:
-                _LOGGER.info("[BACnet Unload] Disconnecting main BACnet Application")
-                await main_client.disconnect()
-            except Exception as err:
-                _LOGGER.error("[BACnet Unload] Error closing main BACnet Application: %s", err)
-
-        # Clean up device coordinators
-        coordinators_to_remove = [
-            key for key in hass.data[DOMAIN]["coordinators"]
-            if key.startswith(f"{entry.entry_id}_bacnet_")
-        ]
-
-        for coord_key in coordinators_to_remove:
-            coordinator = hass.data[DOMAIN]["coordinators"].pop(coord_key, None)
-            _LOGGER.info("[BACnet Unload] Removed coordinator: %s", coord_key)
-
-        # Also remove backward-compat entry
-        hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
-
-    elif protocol == CONF_PROTOCOL_MODBUS:
+    # For Modbus multi-slave, clean up all coordinators
+    if protocol == CONF_PROTOCOL_MODBUS:
         # Clean up Modbus multi-slave coordinators
         coordinators_to_remove = [
             key for key in hass.data[DOMAIN]["coordinators"]
