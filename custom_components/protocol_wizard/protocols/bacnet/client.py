@@ -18,6 +18,7 @@ try:
     from bacpypes3.basetypes import PropertyIdentifier
     from bacpypes3.pdu import Address, LocalBroadcast
 #    from bacpypes3.argparse import SimpleArgumentParser, create_log_handler
+    import ipaddress
     HAS_BACPYPES3 = True
 except ImportError:
     HAS_BACPYPES3 = False
@@ -66,6 +67,30 @@ async def get_my_lan_ip_and_subnet(hass):
     return summary[0]["ip"], summary[0]["prefix"]
 
 
+def calculate_broadcast_address(ip_with_subnet):
+    """
+    Calculate broadcast address from IP/subnet (e.g. "192.168.1.185/24" -> "192.168.1.255")
+    Returns tuple of (ip, subnet_mask, broadcast_address)
+    """
+    try:
+        network = ipaddress.IPv4Network(ip_with_subnet, strict=False)
+        ip = str(network.network_address + 1) if str(network.network_address).endswith('.0') else ip_with_subnet.split('/')[0]
+        broadcast = str(network.broadcast_address)
+        netmask = str(network.netmask)
+
+        _LOGGER.info("Calculated network info:")
+        _LOGGER.info("  IP: %s", ip)
+        _LOGGER.info("  Network: %s", network.network_address)
+        _LOGGER.info("  Netmask: %s", netmask)
+        _LOGGER.info("  Broadcast: %s", broadcast)
+
+        return ip, netmask, broadcast
+    except Exception as e:
+        _LOGGER.error("Failed to calculate broadcast address from %s: %s", ip_with_subnet, e)
+        return None, None, None
+    
+
+
 
 class BACnetClientApp(Application):
     """BACnet client application following bacpypes3 patterns."""
@@ -109,51 +134,53 @@ class BACnetClient:
                 from argparse import Namespace
                 import random
         
-                source_ip = address_adapter = ip_to_use = None
-
-                # Get all network adapters for debugging
-                try:
-                    all_adapters = await get_my_network_summary(hass)
-                    _LOGGER.info("=== ALL NETWORK ADAPTERS ===")
-                    for idx, adapter in enumerate(all_adapters):
-                        _LOGGER.info("  Adapter %d: %s (%s/%s) - default: %s",
-                                    idx, adapter['name'], adapter['ip'], adapter['prefix'], adapter['default'])
-                    _LOGGER.info("===========================")
-                except Exception as err:
-                    _LOGGER.warning("Error getting all adapters: %s", err)
+                source_ip = address_adapter = ip_to_use = self.host
+                broadcast_addr = None
 
                 try:
                     address_adapter = await get_my_lan_ip_and_subnet(hass)
-                    _LOGGER.info("Selected adapter: %s/%s", address_adapter[0], address_adapter[1])
                 except Exception as err:
                     _LOGGER.warning("Error in getting adapter info: %s",  err)
                 try:
                     source_ip = await async_get_source_ip(hass)
-                    _LOGGER.info("Source IP from HA: %s", source_ip)
                 except Exception as err:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
 
-                # CRITICAL: Always use HA IP with subnet for both discovery and device communication
-                # bacpypes3 needs to know the actual network interface to calculate broadcast addresses
-                # The difference between discovery and device mode is the TARGET address, not binding
-                if address_adapter and address_adapter[0]:
-                    ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}"
-                    ip_to_use = ip_with_subnet
-                    if self.host == "0.0.0.0":
-                        _LOGGER.info("Using HA IP %s for broadcast discovery (needs subnet for broadcast calculation)", ip_to_use)
+                if self.host == "0.0.0.0": # Discovery mode - use actual IP
+                    # CRITICAL FIX: Don't use 0.0.0.0 - bacpypes3 can't calculate broadcast!
+                    # Use the actual HA IP address with subnet instead
+                    if address_adapter and address_adapter[0]:
+                        ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}"
+                        ip_to_use = ip_with_subnet
+                        _LOGGER.info("Discovery mode: Using actual IP %s instead of 0.0.0.0 (bacpypes3 requirement)", ip_to_use)
+
+                        # Calculate broadcast address
+                        ip, netmask, broadcast = calculate_broadcast_address(ip_with_subnet)
+                        if broadcast:
+                            broadcast_addr = broadcast
+                            _LOGGER.info("Calculated broadcast address: %s", broadcast_addr)
                     else:
-                        _LOGGER.info("Using HA IP %s for device communication", ip_to_use)
-                elif source_ip:
+                        _LOGGER.error("Cannot use 0.0.0.0 - no network adapter found!")
+                        raise ValueError("Discovery requires valid network interface")
+
+                elif address_adapter[0]: # we want an IP address but probably from a client, let's use our own (HA client) with right subnet
+                    ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
+                    ip_to_use = ip_with_subnet
+
+                    # Calculate broadcast address for diagnostics
+                    ip, netmask, broadcast = calculate_broadcast_address(ip_with_subnet)
+                    if broadcast:
+                        broadcast_addr = broadcast
+                        _LOGGER.info("Calculated broadcast address: %s", broadcast_addr)
+
+                elif source_ip:  # we want an IP address but probably from a client, let's use the fallback if previous one not working.. but lacks subnet!
                     ip_to_use = source_ip
                     _LOGGER.warning("Using source_ip without subnet: %s (broadcast may not work!)", source_ip)
-                else:
-                    ip_to_use = self.host
-                    _LOGGER.warning("Falling back to self.host: %s (may not work correctly)", self.host)
 
                 _LOGGER.info("BACnet binding to address: %s",  ip_to_use)
-                _LOGGER.info("Device target address: %s (self.host preserved)", self.host)
                 _LOGGER.debug("IP address available: %s", address_adapter)
-
+                if broadcast_addr:
+                    _LOGGER.info("Expected broadcast address: %s", broadcast_addr)
                 # Create a proper Namespace with required arguments
                 # CRITICAL: Specify the correct network address to use
                 # Use the actual HA IP address on the correct subnet
@@ -177,18 +204,11 @@ class BACnetClient:
                     route_aware=None,
                 )
                 
-                _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s",
+                _LOGGER.info("Calling Application.from_args() with instance=%s, address=%s", 
                             args.instance, args.address)
-
+                
                 # from_args is synchronous, not async!
-                try:
-                    theApp = Application.from_args(args)
-                except Exception as init_err:
-                    _LOGGER.error("Failed to create Application: %s", init_err)
-                    _LOGGER.error("This might indicate port %s is already in use", self.port)
-                    import traceback
-                    traceback.print_exc()
-                    raise
+                theApp = Application.from_args(args)
 
                 _LOGGER.info("BACnet application initialized successfully!")
                 _LOGGER.info("Has elementService: %s", hasattr(theApp, 'elementService'))
@@ -530,33 +550,24 @@ class BACnetClient:
     
     
     async def read_property(
-        self,
-        object_type: str,
-        object_instance: int,
+        self, 
+        object_type: str, 
+        object_instance: int, 
         property_name: str
     ) -> Optional[Any]:
         """Read BACnet property."""
         if not self._connected or not self.app:
             _LOGGER.error("Not connected to BACnet network")
             return None
-
+        
         try:
             object_id = ObjectIdentifier(f"{object_type},{object_instance}")
             device_address = Address(f"{self.host}:{self.port}")
             prop_id = PropertyIdentifier(property_name)
-
-            _LOGGER.debug("Reading %s from %s at %s",
+            
+            _LOGGER.debug("Reading %s from %s at %s", 
                          property_name, object_id, device_address)
-
-            # Log Application binding info for diagnostics
-            if hasattr(self.app, 'link_layers'):
-                for port_id, link_layer in self.app.link_layers.items():
-                    if hasattr(link_layer, 'address'):
-                        _LOGGER.debug("Application bound to: %s", link_layer.address)
-
-            _LOGGER.debug("Sending read request to device at: %s", device_address)
-            _LOGGER.debug("Request details - objid: %s, prop: %s", object_id, prop_id)
-
+            
             # Add timeout to prevent hanging forever
             try:
                 result = await asyncio.wait_for(
@@ -567,23 +578,16 @@ class BACnetClient:
                     ),
                     timeout=5.0  # 5 second timeout
                 )
-
+                
                 _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
                 return result
-
+                
             except asyncio.TimeoutError:
                 _LOGGER.error("Read timed out after 5 seconds - no response from %s", device_address)
-                _LOGGER.error("Application details:")
-                _LOGGER.error("  self.host (device IP): %s", self.host)
-                _LOGGER.error("  self.device_id: %s", self.device_id)
-                if hasattr(self.app, 'link_layers'):
-                    for port_id, link_layer in self.app.link_layers.items():
-                        if hasattr(link_layer, 'address'):
-                            _LOGGER.error("  Application bound to: %s", link_layer.address)
-                _LOGGER.error("Possible causes:")
+                _LOGGER.error("This means:")
                 _LOGGER.error("  1. Device is not responding")
                 _LOGGER.error("  2. Network/firewall is blocking BACnet traffic")
-                _LOGGER.error("  3. Wrong device address or port")
+                _LOGGER.error("  3. Device is on different subnet")
                 return None
         
         except Exception as err:
@@ -637,54 +641,9 @@ class BACnetClient:
     
     async def disconnect(self):
         """Disconnect from BACnet network."""
-        # Properly close the bacpypes3 Application to free the port
-        if self.app:
-            try:
-                _LOGGER.info("Disconnecting BACnet Application (instance: %s)",
-                           getattr(self.app, 'objectIdentifier', 'unknown'))
-
-                # Try to close link layers first to release sockets
-                if hasattr(self.app, 'link_layers'):
-                    for port_id, link_layer in self.app.link_layers.items():
-                        try:
-                            if hasattr(link_layer, 'close'):
-                                if asyncio.iscoroutinefunction(link_layer.close):
-                                    await link_layer.close()
-                                else:
-                                    link_layer.close()
-                                _LOGGER.info("Closed link layer %s", port_id)
-                        except Exception as err:
-                            _LOGGER.warning("Error closing link layer %s: %s", port_id, err)
-
-                # Try to close the application properly (may be sync or async)
-                if hasattr(self.app, 'close'):
-                    close_method = self.app.close
-                    if asyncio.iscoroutinefunction(close_method):
-                        await close_method()
-                    else:
-                        close_method()
-                    _LOGGER.info("BACnet Application closed")
-                elif hasattr(self.app, 'stop'):
-                    stop_method = self.app.stop
-                    if asyncio.iscoroutinefunction(stop_method):
-                        await stop_method()
-                    else:
-                        stop_method()
-                    _LOGGER.info("BACnet Application stopped")
-                else:
-                    _LOGGER.info("No explicit close/stop method - clearing references")
-
-                # Give the OS time to release the socket
-                await asyncio.sleep(0.1)
-            except Exception as err:
-                _LOGGER.warning("Error closing BACnet Application: %s", err)
-                import traceback
-                traceback.print_exc()
-
+        # Don't disconnect global app, just clear reference
         self.app = None
-        self._bacpypeinstance = None
         self._connected = False
-        _LOGGER.info("BACnet client disconnected")
     
     
     @property
