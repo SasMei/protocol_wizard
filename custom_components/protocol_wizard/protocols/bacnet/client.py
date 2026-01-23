@@ -111,12 +111,25 @@ class BACnetClient:
         
                 source_ip = address_adapter = ip_to_use = None
 
+                # Get all network adapters for debugging
+                try:
+                    all_adapters = await get_my_network_summary(hass)
+                    _LOGGER.info("=== ALL NETWORK ADAPTERS ===")
+                    for idx, adapter in enumerate(all_adapters):
+                        _LOGGER.info("  Adapter %d: %s (%s/%s) - default: %s",
+                                    idx, adapter['name'], adapter['ip'], adapter['prefix'], adapter['default'])
+                    _LOGGER.info("===========================")
+                except Exception as err:
+                    _LOGGER.warning("Error getting all adapters: %s", err)
+
                 try:
                     address_adapter = await get_my_lan_ip_and_subnet(hass)
+                    _LOGGER.info("Selected adapter: %s/%s", address_adapter[0], address_adapter[1])
                 except Exception as err:
                     _LOGGER.warning("Error in getting adapter info: %s",  err)
                 try:
                     source_ip = await async_get_source_ip(hass)
+                    _LOGGER.info("Source IP from HA: %s", source_ip)
                 except Exception as err:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
 
