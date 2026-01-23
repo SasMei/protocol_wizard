@@ -493,14 +493,27 @@ async def _load_template_into_options(
                 # Put entities into first slave's registers
                 slaves[0]["registers"] = template_data
                 new_options[CONF_SLAVES] = slaves
-                _LOGGER.info("Loaded %d entities from template '%s' into slave %d", 
+                _LOGGER.info("Loaded %d entities from template '%s' into slave %d",
                             len(template_data), template_name, slaves[0]["slave_id"])
             else:
                 # Fallback to old structure (shouldn't happen after migration)
                 new_options[CONF_REGISTERS] = template_data
                 _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
+        elif protocol == CONF_PROTOCOL_BACNET:
+            # For BACnet, check if we have device structure
+            bacnet_devices = new_options.get(CONF_BACNET_DEVICES, [])
+            if bacnet_devices:
+                # Put entities into first device's entities
+                bacnet_devices[0]["entities"] = template_data
+                new_options[CONF_BACNET_DEVICES] = bacnet_devices
+                _LOGGER.info("Loaded %d entities from template '%s' into BACnet device %d",
+                            len(template_data), template_name, bacnet_devices[0]["device_id"])
+            else:
+                # Fallback to old structure (shouldn't happen after migration)
+                new_options[CONF_ENTITIES] = template_data
+                _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
         else:
-            # Non-Modbus protocols use CONF_ENTITIES
+            # Other protocols (SNMP, MQTT, etc.) use CONF_ENTITIES
             new_options[CONF_ENTITIES] = template_data
             _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
