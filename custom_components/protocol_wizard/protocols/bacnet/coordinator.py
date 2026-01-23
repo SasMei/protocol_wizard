@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from .const import parse_bacnet_address, entity_key
 from .client import BACnetClient
-from ...const import CONF_ENTITIES, CONF_PROTOCOL_BACNET
+from ...const import CONF_ENTITIES, CONF_PROTOCOL_BACNET, CONF_BACNET_DEVICES
 _LOGGER = logging.getLogger(__name__)
 
 @ProtocolRegistry.register(CONF_PROTOCOL_BACNET)
@@ -221,10 +221,23 @@ class BACnetCoordinator(BaseProtocolCoordinator):
             _LOGGER.warning("[BACnet] Could not connect to device — skipping update")
             return {}
         
-        # Get entities from config
-        entities = self.my_config_entry.options.get(CONF_ENTITIES, [])
+        # Get entities from config (multi-device structure)
+        bacnet_devices = self.my_config_entry.options.get(CONF_BACNET_DEVICES, [])
+        if bacnet_devices and hasattr(self, 'device_index'):
+            # Multi-device mode: get entities from this device
+            device_index = self.device_index
+            if device_index < len(bacnet_devices):
+                entities = bacnet_devices[device_index].get('entities', [])
+            else:
+                _LOGGER.warning("[BACnet] Device index %d out of range (total: %d)",
+                              device_index, len(bacnet_devices))
+                entities = []
+        else:
+            # Fallback to old structure for backward compatibility
+            entities = self.my_config_entry.options.get(CONF_ENTITIES, [])
+
         if not entities:
-            _LOGGER.debug("[BACnet] No entities configured")
+            _LOGGER.debug("[BACnet] No entities configured for this device")
             return {}
         
         new_data = {}
