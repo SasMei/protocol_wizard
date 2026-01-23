@@ -109,7 +109,7 @@ class BACnetClient:
                 from argparse import Namespace
                 import random
         
-                source_ip = address_adapter = ip_to_use = self.host
+                source_ip = address_adapter = ip_to_use = None
 
                 try:
                     address_adapter = await get_my_lan_ip_and_subnet(hass)
@@ -120,17 +120,22 @@ class BACnetClient:
                 except Exception as err:
                     _LOGGER.warning("Error in getting HA local IP info: %s",  err)
 
-                if self.host == "0.0.0.0": # we want a broadcast one, so let's use that one.
-                    ip_to_use = self.host
-                    _LOGGER.info("Using 0.0.0.0 for broadcast discovery (all interfaces)")
-                elif address_adapter[0]: # we want an IP address but probably from a client, let's use our own (HA client) with right subnet
-                    ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}" # includes subnet which is important
+                # CRITICAL: Always use HA IP with subnet for both discovery and device communication
+                # bacpypes3 needs to know the actual network interface to calculate broadcast addresses
+                # The difference between discovery and device mode is the TARGET address, not binding
+                if address_adapter and address_adapter[0]:
+                    ip_with_subnet = f"{address_adapter[0]}/{address_adapter[1]}"
                     ip_to_use = ip_with_subnet
-                    _LOGGER.info("Using HA IP %s for device communication", ip_to_use)
-
-                elif source_ip:  # we want an IP address but probably from a client, let's use the fallback if previous one not working.. but lacks subnet!
+                    if self.host == "0.0.0.0":
+                        _LOGGER.info("Using HA IP %s for broadcast discovery (needs subnet for broadcast calculation)", ip_to_use)
+                    else:
+                        _LOGGER.info("Using HA IP %s for device communication", ip_to_use)
+                elif source_ip:
                     ip_to_use = source_ip
                     _LOGGER.warning("Using source_ip without subnet: %s (broadcast may not work!)", source_ip)
+                else:
+                    ip_to_use = self.host
+                    _LOGGER.warning("Falling back to self.host: %s (may not work correctly)", self.host)
 
                 _LOGGER.info("BACnet binding to address: %s",  ip_to_use)
                 _LOGGER.info("Device target address: %s (self.host preserved)", self.host)
