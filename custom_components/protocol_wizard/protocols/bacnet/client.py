@@ -641,9 +641,53 @@ class BACnetClient:
     
     async def disconnect(self):
         """Disconnect from BACnet network."""
-        # Don't disconnect global app, just clear reference
-        self.app = None
-        self._connected = False
+        # Properly close the bacpypes3 Application to free the port
+        if self.app:
+            try:
+                _LOGGER.info("Disconnecting BACnet Application (instance: %s)",
+                           getattr(self.app, 'objectIdentifier', 'unknown'))
+
+                # Try to close link layers first to release sockets
+                if hasattr(self.app, 'link_layers'):
+                    for port_id, link_layer in self.app.link_layers.items():
+                        try:
+                            if hasattr(link_layer, 'close'):
+                                if asyncio.iscoroutinefunction(link_layer.close):
+                                    await link_layer.close()
+                                else:
+                                    link_layer.close()
+                                _LOGGER.info("Closed link layer %s", port_id)
+                        except Exception as err:
+                            _LOGGER.warning("Error closing link layer %s: %s", port_id, err)
+
+                # Try to close the application properly (may be sync or async)
+                if hasattr(self.app, 'close'):
+                    close_method = self.app.close
+                    if asyncio.iscoroutinefunction(close_method):
+                        await close_method()
+                    else:
+                        close_method()
+                    _LOGGER.info("BACnet Application closed")
+                elif hasattr(self.app, 'stop'):
+                    stop_method = self.app.stop
+                    if asyncio.iscoroutinefunction(stop_method):
+                        await stop_method()
+                    else:
+                        stop_method()
+                    _LOGGER.info("BACnet Application stopped")
+                else:
+                    _LOGGER.warning("Application has no close() or stop() method - port may remain bound!")
+
+            except Exception as err:
+                _LOGGER.error("Error disconnecting BACnet Application: %s", err)
+                import traceback
+                traceback.print_exc()
+            finally:
+                self.app = None
+                self._bacpypeinstance = None
+                self._connected = False
+        else:
+            self._connected = False
     
     
     @property
