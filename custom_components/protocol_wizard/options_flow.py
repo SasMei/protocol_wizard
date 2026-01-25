@@ -217,7 +217,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         if not slaves or self._selected_slave_index >= len(slaves):
             return await self.async_step_init()
         
-        slave = slaves[self._selected_slave_index]
+  #      slave = slaves[self._selected_slave_index]
    #     slave_name = slave.get('name', f"Slave {slave['slave_id']}")
         
         menu_options = {
