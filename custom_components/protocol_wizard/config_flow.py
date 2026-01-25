@@ -568,7 +568,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
                                 CONF_NAME: "BACnet Network",
                                 CONF_PORT: port,  # Default port for network
-                                "network_number": None,  # Local network
+                                "network_number": 0,  # Local network
                             },
                             options={
                                 "bacnet_devices": [device_config]
@@ -675,7 +675,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST].strip()
             device_id = user_input["device_id"]
             port = user_input.get(CONF_PORT, 47808)
-            network_number = user_input.get("network_number")
+            network_number = user_input.get("network_number",0)
             
             if not host:
                 errors[CONF_HOST] = "required"
