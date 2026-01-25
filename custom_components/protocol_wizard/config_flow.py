@@ -566,7 +566,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             title=f"BACnet Network ({host})",
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                                CONF_NAME: f"BACnet Network",
+                                CONF_NAME: "BACnet Network",
                                 CONF_PORT: port,  # Default port for network
                                 "network_number": None,  # Local network
                             },
