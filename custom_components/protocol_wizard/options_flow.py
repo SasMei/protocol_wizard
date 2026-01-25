@@ -120,9 +120,9 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 # Show slave management menu (allows adding more slaves)
                 slave_count = len(slaves)
                 if slave_count == 1:
-                    menu_options["select_slave"] = f"⚙️ Manage Slaves (1 slave, add more)"
+                    menu_options["select_slave"] = "Manage Slaves (1 slave, add more)"
                 else:
-                    menu_options["select_slave"] = f"⚙️ Manage Slaves ({slave_count} slaves)"
+                    menu_options["select_slave"] = f"Manage Slaves ({slave_count} slaves)"
 
                 # If single slave, also show entity shortcuts for convenience
                 if slave_count == 1:
@@ -195,8 +195,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             name = slave.get('name', f"Slave {slave['slave_id']}")
             slave_id = slave['slave_id']
             entity_count = len(slave.get('registers', []))
-            options[f"configure_{idx}"] = f"⚙️ {name} (ID {slave_id}) - {entity_count} entities"
-            options[f"delete_{idx}"] = f"🗑️ Delete: {name} (ID {slave_id})"
+            options[f"configure_{idx}"] = f"{name} (ID {slave_id}) - {entity_count} entities"
+            options[f"delete_{idx}"] = f"Delete: {name} (ID {slave_id})"
         
         return self.async_show_form(
             step_id="select_slave",
@@ -218,7 +218,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_init()
         
         slave = slaves[self._selected_slave_index]
-        slave_name = slave.get('name', f"Slave {slave['slave_id']}")
+   #     slave_name = slave.get('name', f"Slave {slave['slave_id']}")
         
         menu_options = {
             "add_entity": "Add entity",
