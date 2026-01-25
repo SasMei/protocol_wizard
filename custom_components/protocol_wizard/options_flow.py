@@ -345,7 +345,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             processed = self.schema_handler.process_input(user_input, errors, existing=None)
             if processed and not errors:
                 self._entities.append(processed)
-                self._save_entities()
+                await self._save_entities()
                 return await self.async_step_init()
 
         return self.async_show_form(
@@ -395,7 +395,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             processed = self.schema_handler.process_input(user_input, errors, existing=entity)
             if processed and not errors:
                 self._entities[self._edit_index] = processed
-                self._save_entities()
+                await self._save_entities()
                 return await self.async_step_init()
 
         defaults = self.schema_handler.get_defaults(entity)
@@ -420,7 +420,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     if str(i) not in delete
                 ]
         
-            self._save_entities()
+            await self._save_entities()
             return await self.async_step_init()
 
         options = [
@@ -513,7 +513,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                     errors={"base": "template_empty_or_duplicate"},
                 )
             
-            self._save_entities()
+            await self._save_entities()
             return await self.async_step_init() # must go back to options flow to avoid race condition reloading entities
         
         # Get templates for dropdown
@@ -603,7 +603,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
-    def _save_entities(self):
+    async def _save_entities(self):
         options = dict(self._config_entry.options)
 
         if self.protocol == CONF_PROTOCOL_MODBUS:
@@ -640,14 +640,12 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         else:
             # Other protocols (SNMP, MQTT, etc.)
             options[CONF_ENTITIES] = self._entities
-        
-        # Update entry (synchronous)
+
+        # Update entry
         self.hass.config_entries.async_update_entry(self._config_entry, options=options)
-        
-        # Schedule reload in background (fire and forget)
-        self.hass.async_create_task(
-            self.hass.config_entries.async_reload(self._config_entry.entry_id)
-        )
+
+        # Wait for reload to complete to ensure storage is flushed
+        await self.hass.config_entries.async_reload(self._config_entry.entry_id)
 
     def _save_options(self, updates: dict):
         options = dict(self._config_entry.options)
