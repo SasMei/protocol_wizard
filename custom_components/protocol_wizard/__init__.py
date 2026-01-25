@@ -198,7 +198,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 options.pop(CONF_REGISTERS, None)
                 options.pop(CONF_TEMPLATE, None)
                 hass.config_entries.async_update_entry(entry, options=options)
-            else:
             
             # Create a coordinator for each slave
             coordinators_created = []
