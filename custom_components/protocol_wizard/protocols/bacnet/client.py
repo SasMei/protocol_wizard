@@ -112,7 +112,7 @@ class BACnetClient:
         host: str, 
         device_id: Optional[int] = None,
         port: int = 47808,
-        network_number: Optional[int] = None
+        network_number: Optional[int] = 0
     ):
         """Initialize BACnet client."""
         if not HAS_BACPYPES3:
