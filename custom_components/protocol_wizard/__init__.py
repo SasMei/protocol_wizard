@@ -53,6 +53,7 @@ from .const import (
     CONF_ENTITIES,
     CONF_REGISTERS,
     CONF_SLAVES,
+    CONF_BACNET_DEVICES,
 )
 
 
@@ -270,22 +271,123 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             
             # Platforms (forward to all platforms once for all slaves)
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-            
+
+        elif protocol_name == CONF_PROTOCOL_BACNET:
+            # BACnet handling - for now, support single device per entry
+            # Data structure supports multiple devices for future expansion
+            bacnet_devices = entry.options.get(CONF_BACNET_DEVICES, [])
+
+            _LOGGER.info("[BACnet Setup] Entry: %s, has %d devices",
+                        entry.title, len(bacnet_devices))
+
+            # DEBUG: Log the full structure
+            _LOGGER.error("[BACnet DEBUG] Full bacnet_devices structure: %s", bacnet_devices)
+            _LOGGER.error("[BACnet DEBUG] entry.options keys: %s", list(entry.options.keys()))
+            if bacnet_devices:
+                _LOGGER.error("[BACnet DEBUG] First device entities count: %d", len(bacnet_devices[0].get("entities", [])))
+                _LOGGER.error("[BACnet DEBUG] First device full data: %s", bacnet_devices[0])
+
+            if not bacnet_devices:
+                _LOGGER.error("No BACnet devices configured - skipping")
+                return False
+
+            # For now, only support first device (future: loop through all)
+            # This keeps it simple and avoids Application sharing issues
+            device_info = bacnet_devices[0]
+            device_id = device_info["device_id"]
+            device_name = device_info.get("name", f"BACnet Device {device_id}")
+            device_address = device_info["address"]
+
+            _LOGGER.info("[BACnet Setup] Creating client for device %d (%s) at %s, %d entities",
+                        device_id, device_name, device_address, len(device_info.get('entities', [])))
+
+            # Create simple BACnetClient (what worked before!)
+            # One client per entry, no sharing, no complexity
+            bacnet_client = BACnetClient(
+                hass=hass,
+                host=device_address,
+                device_id=device_id,
+                port=device_info.get("port", 47808),
+                network_number=config.get("network_number")
+            )
+
+            # Connect the client
+            try:
+                if not await bacnet_client.connect():
+                    _LOGGER.error("Failed to connect to BACnet device %d at %s", device_id, device_address)
+                    return False
+            except OSError as err:
+                if err.errno == 98:  # Address already in use
+                    _LOGGER.error("Port 47808 is already in use! This usually means:")
+                    _LOGGER.error("  1. Another BACnet integration entry is still loading")
+                    _LOGGER.error("  2. A previous entry wasn't cleaned up properly")
+                    _LOGGER.error("  3. Another application is using port 47808")
+                    _LOGGER.error("Solution: Restart Home Assistant to clear all BACnet connections")
+                    return False
+                raise
+
+            from .protocols.bacnet.coordinator import BACnetCoordinator
+
+            update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
+
+            coordinator = BACnetCoordinator(
+                hass=hass,
+                client=bacnet_client,
+                config_entry=entry,
+                update_interval=timedelta(seconds=update_interval),
+            )
+
+            # Store device index for entity lookup (always 0 for single device)
+            coordinator.device_index = 0
+
+            # Handle template loading
+            template_name = device_info.get("template")
+            if template_name and not device_info.get("template_applied"):
+                _LOGGER.info("Loading template '%s' for BACnet device %d", template_name, device_id)
+                template_entities = await load_template(hass, CONF_PROTOCOL_BACNET, template_name)
+                if template_entities:
+                    device_info["entities"] = template_entities
+                    device_info["template_applied"] = True
+
+                    # Save back to options
+                    options = dict(entry.options)
+                    options[CONF_BACNET_DEVICES] = bacnet_devices
+                    hass.config_entries.async_update_entry(entry, options=options)
+
+            await coordinator.async_config_entry_first_refresh()
+
+            # Store coordinator with entry_id (simple, like other protocols)
+            hass.data[DOMAIN]["coordinators"][entry.entry_id] = coordinator
+
+            devicename = entry.title or entry.data.get(CONF_NAME) or "BACnet Device"
+
+            # Create device registry entry
+            device_registry = dr.async_get(hass)
+            device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={(DOMAIN, entry.entry_id)},
+                name=devicename,
+                manufacturer="BACnet",
+                model=f"BACnet Device {device_id}",
+                configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+            )
+
+            # Forward to platforms
+            await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
         elif protocol_name == CONF_PROTOCOL_SNMP:
             client = _create_snmp_client(config)
         elif protocol_name == CONF_PROTOCOL_MQTT:
             client = _create_mqtt_client(config)
-        elif protocol_name == CONF_PROTOCOL_BACNET:
-            client = _create_bacnet_client(config, hass)
         else:
             _LOGGER.error("Protocol %s not yet implemented", protocol_name)
             return False
     except Exception as err:
         _LOGGER.error("Failed to create client for %s: %s", protocol_name, err)
         return False
-    
-    # For non-Modbus protocols, create single coordinator
-    if protocol_name != CONF_PROTOCOL_MODBUS:
+
+    # For non-Modbus, non-BACnet protocols, create single coordinator
+    if protocol_name not in (CONF_PROTOCOL_MODBUS, CONF_PROTOCOL_BACNET):
         # Create coordinator
         update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
         
@@ -368,14 +470,31 @@ async def _load_template_into_options(
                 # Put entities into first slave's registers
                 slaves[0]["registers"] = template_data
                 new_options[CONF_SLAVES] = slaves
-                _LOGGER.info("Loaded %d entities from template '%s' into slave %d", 
+                _LOGGER.info("Loaded %d entities from template '%s' into slave %d",
                             len(template_data), template_name, slaves[0]["slave_id"])
             else:
                 # Fallback to old structure (shouldn't happen after migration)
                 new_options[CONF_REGISTERS] = template_data
                 _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
+        elif protocol == CONF_PROTOCOL_BACNET:
+            # For BACnet, check if we have device structure
+            bacnet_devices = new_options.get(CONF_BACNET_DEVICES, [])
+            _LOGGER.error("[Template Load DEBUG] BACnet devices before: %s", bacnet_devices)
+            if bacnet_devices:
+                # Put entities into first device's entities
+                bacnet_devices[0]["entities"] = template_data
+                new_options[CONF_BACNET_DEVICES] = bacnet_devices
+                _LOGGER.info("Loaded %d entities from template '%s' into BACnet device %d",
+                            len(template_data), template_name, bacnet_devices[0]["device_id"])
+                _LOGGER.error("[Template Load DEBUG] BACnet devices after: %s", bacnet_devices)
+                _LOGGER.error("[Template Load DEBUG] new_options keys: %s", list(new_options.keys()))
+            else:
+                # Fallback to old structure (shouldn't happen after migration)
+                new_options[CONF_ENTITIES] = template_data
+                _LOGGER.info("Loaded %d entities from template '%s' (old structure)", len(template_data), template_name)
+                _LOGGER.error("[Template Load DEBUG] Using old structure fallback!")
         else:
-            # Non-Modbus protocols use CONF_ENTITIES
+            # Other protocols (SNMP, MQTT, etc.) use CONF_ENTITIES
             new_options[CONF_ENTITIES] = template_data
             _LOGGER.info("Loaded %d entities from template '%s'", len(template_data), template_name)
         
@@ -904,25 +1023,56 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    
-    coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
-    
+
+    protocol = entry.data.get(CONF_PROTOCOL)
+
+    # For Modbus multi-slave, clean up all coordinators
+    if protocol == CONF_PROTOCOL_MODBUS:
+        # Clean up Modbus multi-slave coordinators
+        coordinators_to_remove = [
+            key for key in hass.data[DOMAIN]["coordinators"]
+            if key.startswith(f"{entry.entry_id}_slave_")
+        ]
+
+        for coord_key in coordinators_to_remove:
+            hass.data[DOMAIN]["coordinators"].pop(coord_key, None)
+
+        # Also remove backward-compat entry
+        coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+
+        # Close Modbus client if unused
+        if coordinator:
+            client = coordinator.client
+            still_used = any(
+                c.client is client
+                for c in hass.data[DOMAIN]["coordinators"].values()
+            )
+
+            if not still_used:
+                try:
+                    await client.disconnect()
+                except Exception as err:
+                    _LOGGER.debug("Error closing Modbus client: %s", err)
+    else:
+        # Other protocols (SNMP, MQTT, etc.)
+        coordinator = hass.data[DOMAIN]["coordinators"].pop(entry.entry_id, None)
+
+        # Close connection if unused
+        if coordinator:
+            client = coordinator.client
+            still_used = any(
+                c.client is client
+                for c in hass.data[DOMAIN]["coordinators"].values()
+            )
+
+            if not still_used:
+                try:
+                    await client.disconnect()
+                except Exception as err:
+                    _LOGGER.debug("Error closing client: %s", err)
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if not unload_ok:
         return False
-    
-    # Close connection if unused
-    if coordinator:
-        client = coordinator.client
-        still_used = any(
-            c.client is client
-            for c in hass.data[DOMAIN]["coordinators"].values()
-        )
-        
-        if not still_used:
-            try:
-                await client.disconnect()
-            except Exception as err:
-                _LOGGER.debug("Error closing client: %s", err)
-    
+
     return True

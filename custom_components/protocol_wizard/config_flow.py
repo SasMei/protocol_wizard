@@ -552,17 +552,27 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(self.hass, host, device_id, port)
                     
                     if await client.connect():
+                        # New structure: Store as BACnet Network with one device
+                        device_config = {
+                            "device_id": device_id,
+                            "address": host,
+                            "port": port,
+                            "name": f"BACnet Device {device_id}",
+                            "entities": [],
+                            "template_applied": False
+                        }
+
                         return self.async_create_entry(
-                            title=f"BACnet Device {device_id} ({host})",
+                            title=f"BACnet Network ({host})",
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                                CONF_NAME: f"BACnet Device {device_id}",
-                                CONF_HOST: host,
-                                CONF_PORT: port,
-                                "device_id": device_id,
-                                "network_number": None,  # Local network
+                                CONF_NAME: "BACnet Network",
+                                CONF_PORT: port,  # Default port for network
+                                "network_number": 0,  # Local network
                             },
-                            options={},
+                            options={
+                                "bacnet_devices": [device_config]
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"
@@ -578,9 +588,10 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         discovered_devices = []
         
+        discovery_client = None
         try:
             from .protocols.bacnet.client import BACnetClient
-            
+
             # Create temporary client for discovery
             discovery_client = BACnetClient(
                 self.hass,
@@ -588,14 +599,14 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 device_id=None,   # Discovery mode
                 port=47808
             )
-            
+
             # Run discovery (with timeout)
             _LOGGER.info("Starting BACnet device discovery...")
             discovered = await asyncio.wait_for(
                 discovery_client.discover_devices(timeout=10),
-                timeout=12
+                timeout=15  # Increased from 12 to allow for 10s wait + 0.5s sleep + collection + overhead
             )
-            
+
             if discovered:
                 # Format discovered devices for dropdown
                 for device in discovered:
@@ -604,18 +615,26 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "value": label,
                         "label": label
                     })
-                
+
                 _LOGGER.info("Discovered %d BACnet devices", len(discovered_devices))
             else:
                 _LOGGER.warning("No BACnet devices discovered")
                 errors["base"] = "no_devices_found"
-        
+
         except asyncio.TimeoutError:
             _LOGGER.error("BACnet discovery timed out")
             errors["base"] = "discovery_timeout"
         except Exception as err:
             _LOGGER.error("BACnet discovery failed: %s", err)
             errors["base"] = "discovery_failed"
+        finally:
+            # Clean up discovery client to free port
+            if discovery_client:
+                try:
+                    await discovery_client.disconnect()
+                    _LOGGER.info("Discovery client disconnected")
+                except Exception as err:
+                    _LOGGER.warning("Error disconnecting discovery client: %s", err)
         
         # If no devices found or error, show option to go manual
         if not discovered_devices or errors:
@@ -626,7 +645,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }),
                 errors=errors,
                 description_placeholders={
-                    "message": "No devices found. Enable retry or use manual entry."
+                    "count": "0"  # Provide count for translation string
                 }
             )
         
@@ -656,7 +675,7 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             host = user_input[CONF_HOST].strip()
             device_id = user_input["device_id"]
             port = user_input.get(CONF_PORT, 47808)
-            network_number = user_input.get("network_number")
+            network_number = user_input.get("network_number",0)
             
             if not host:
                 errors[CONF_HOST] = "required"
@@ -669,18 +688,29 @@ class ProtocolWizardConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client = BACnetClient(self.hass, host, device_id, port, network_number)
                     
                     if await client.connect():
-                        title = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+                        device_name = user_input.get(CONF_NAME) or f"BACnet Device {device_id}"
+
+                        # New structure: Store as BACnet Network with one device
+                        device_config = {
+                            "device_id": device_id,
+                            "address": host,
+                            "port": port,
+                            "name": device_name,
+                            "entities": [],
+                            "template_applied": False
+                        }
+
                         return self.async_create_entry(
-                            title=title,
+                            title=f"BACnet Network ({host})",
                             data={
                                 CONF_PROTOCOL: CONF_PROTOCOL_BACNET,
-                                CONF_NAME: title,
-                                CONF_HOST: host,
-                                CONF_PORT: port,
-                                "device_id": device_id,
+                                CONF_NAME: "BACnet Network",
+                                CONF_PORT: port,  # Default port for network
                                 "network_number": network_number,
                             },
-                            options={},
+                            options={
+                                "bacnet_devices": [device_config]
+                            },
                         )
                     else:
                         errors["base"] = "cannot_connect"

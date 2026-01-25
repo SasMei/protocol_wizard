@@ -42,15 +42,19 @@ CONF_PORT = "port"
 
 # Entity configuration
 CONF_ENTITIES = "entities"  # Standard key for most protocols
-CONF_REGISTERS = "registers"
+CONF_REGISTERS = "registers"  # Modbus-specific (legacy)
+CONF_SLAVES = "slaves"  # Modbus multi-slave structure
+CONF_BACNET_DEVICES = "bacnet_devices"  # BACnet multi-device structure
+
+# Protocol names
 CONF_PROTOCOL_MODBUS = "modbus"
 CONF_PROTOCOL_SNMP = "snmp"
 CONF_PROTOCOL_MQTT = "mqtt"
 CONF_PROTOCOL_BACNET = "bacnet"
 CONF_PROTOCOL_KNX = "knx"
-CONF_PROTOCOL = "protocol"
+
+# Other
 CONF_IP = "IP"
-CONF_SLAVES = "slaves"
 
 # Defaults
 DEFAULT_SLAVE_ID = 1
