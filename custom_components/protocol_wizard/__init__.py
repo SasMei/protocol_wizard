@@ -113,15 +113,33 @@ async def async_register_card(hass: HomeAssistant, entry: ConfigEntry):
     })
     _LOGGER.debug("Card registered: %s", card_url)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Protocol Wizard from a config entry."""
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Protocol Wizard integration (domain-level, runs once)."""
+    # Initialize domain data storage
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].setdefault("connections", {})
     hass.data[DOMAIN].setdefault("coordinators", {})
 
-    config = entry.data
+    # Ensure template directories exist
     ensure_user_template_dirs(hass)
+
+    # Register services (domain-level, shared across all entries)
+    await async_setup_services(hass)
+
+    # Install frontend resources (domain-level, shared across all entries)
+    await async_install_frontend_resource(hass)
+    # Note: Card registration needs an entry, so it's done in first entry setup
+
+    _LOGGER.info("Protocol Wizard domain setup complete")
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Protocol Wizard from a config entry."""
+    # Domain data already initialized in async_setup()
+
+    config = entry.data
     # Determine protocol
     protocol_name = config.get(CONF_PROTOCOL)
     if protocol_name is None:
@@ -429,18 +447,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
-    # Services (register once)
-    if not hass.data[DOMAIN].get("services_registered"):
-        await async_setup_services(hass)
-        hass.data[DOMAIN]["services_registered"] = True
-    
-    # Frontend (register once, not per entry)
-    if not hass.data[DOMAIN].get("frontend_registered"):
-        await async_install_frontend_resource(hass)
+
+    # Register Lovelace card (needs entry parameter, so done here on first entry)
+    if not hass.data[DOMAIN].get("card_registered"):
         await async_register_card(hass, entry)
-        hass.data[DOMAIN]["frontend_registered"] = True
-    
+        hass.data[DOMAIN]["card_registered"] = True
+
     return True
 
 
