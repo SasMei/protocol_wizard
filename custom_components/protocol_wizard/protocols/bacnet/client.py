@@ -564,12 +564,19 @@ class BACnetClient:
             object_id = ObjectIdentifier(f"{object_type},{object_instance}")
             device_address = Address(f"{self.host}:{self.port}")
             prop_id = PropertyIdentifier(property_name)
-            
-            _LOGGER.debug("Reading %s from %s at %s", 
-                         property_name, object_id, device_address)
-            
+
+            _LOGGER.error("===== BACNET READ DEBUG =====")
+            _LOGGER.error("Reading %s from %s at %s", property_name, object_id, device_address)
+            _LOGGER.error("self.host = %s", self.host)
+            _LOGGER.error("self.port = %s", self.port)
+            _LOGGER.error("device_address type: %s", type(device_address))
+            _LOGGER.error("device_address value: %s", device_address)
+            _LOGGER.error("app bound to: %s", self.app.link_layers if hasattr(self.app, 'link_layers') else 'unknown')
+            _LOGGER.error("============================")
+
             # Add timeout to prevent hanging forever
             try:
+                _LOGGER.error("Calling app.read_property()...")
                 result = await asyncio.wait_for(
                     self.app.read_property(
                         address=device_address,
@@ -578,16 +585,13 @@ class BACnetClient:
                     ),
                     timeout=5.0  # 5 second timeout
                 )
+                _LOGGER.error("app.read_property() returned: %s", result)
                 
                 _LOGGER.debug("Read result: %s (type: %s)", result, type(result))
                 return result
                 
             except asyncio.TimeoutError:
-                _LOGGER.error("Read timed out after 5 seconds - no response from %s", device_address)
-                _LOGGER.error("This means:")
-                _LOGGER.error("  1. Device is not responding")
-                _LOGGER.error("  2. Network/firewall is blocking BACnet traffic")
-                _LOGGER.error("  3. Device is on different subnet")
+                _LOGGER.debug("Read timed out after 5 seconds - no response from %s", device_address)
                 return None
         
         except Exception as err:

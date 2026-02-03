@@ -113,15 +113,33 @@ async def async_register_card(hass: HomeAssistant, entry: ConfigEntry):
     })
     _LOGGER.debug("Card registered: %s", card_url)
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Protocol Wizard from a config entry."""
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up the Protocol Wizard integration (domain-level, runs once)."""
+    # Initialize domain data storage
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN].setdefault("connections", {})
     hass.data[DOMAIN].setdefault("coordinators", {})
 
-    config = entry.data
+    # Ensure template directories exist
     ensure_user_template_dirs(hass)
+
+    # Register services (domain-level, shared across all entries)
+    await async_setup_services(hass)
+
+    # Install frontend resources (domain-level, shared across all entries)
+    await async_install_frontend_resource(hass)
+    # Note: Card registration needs an entry, so it's done in first entry setup
+
+    _LOGGER.info("Protocol Wizard domain setup complete")
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Protocol Wizard from a config entry."""
+    # Domain data already initialized in async_setup()
+
+    config = entry.data
     # Determine protocol
     protocol_name = config.get(CONF_PROTOCOL)
     if protocol_name is None:
@@ -143,9 +161,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Get list of slaves (defaults to single slave from CONF_SLAVE_ID for backward compatibility)
             slaves = entry.options.get(CONF_SLAVES, [])
             
-            _LOGGER.error("========== NEW CODE RUNNING! Entry: %s, has CONF_SLAVES: %s, count: %d ==========", 
-                        entry.title, slaves is not None and len(slaves) > 0, len(slaves) if slaves else 0)
-            
             if not slaves:
                 # Backward compatibility: no slaves defined = use CONF_SLAVE_ID and global CONF_REGISTERS
                 default_slave_id = config.get(CONF_SLAVE_ID, 1)
@@ -155,13 +170,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 # Check if there's a pending template from config_flow
                 pending_template = entry.options.get(CONF_TEMPLATE)
 
-                _LOGGER.error("========== MIGRATION STARTING: slave_id=%d, %d entities, template=%s ==========",
-                             default_slave_id, len(old_registers), pending_template or "None")
-
                 # Log first entity as example
                 if old_registers:
                     first_entity = old_registers[0]
-                    _LOGGER.error("========== FIRST ENTITY: name=%s, address=%s, data_type=%s ==========",
+                    _LOGGER.debug("========== FIRST ENTITY: name=%s, address=%s, data_type=%s ==========",
                                 first_entity.get("name"), first_entity.get("address"),
                                 first_entity.get("data_type"))
 
@@ -186,9 +198,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 options.pop(CONF_REGISTERS, None)
                 options.pop(CONF_TEMPLATE, None)
                 hass.config_entries.async_update_entry(entry, options=options)
-                _LOGGER.error("========== MIGRATION COMPLETE ==========")
-            else:
-                _LOGGER.error("========== USING EXISTING SLAVES: %d slaves ==========", len(slaves))
             
             # Create a coordinator for each slave
             coordinators_created = []
@@ -281,14 +290,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         entry.title, len(bacnet_devices))
 
             # DEBUG: Log the full structure
-            _LOGGER.error("[BACnet DEBUG] Full bacnet_devices structure: %s", bacnet_devices)
-            _LOGGER.error("[BACnet DEBUG] entry.options keys: %s", list(entry.options.keys()))
+            _LOGGER.info("[BACnet DEBUG] Full bacnet_devices structure: %s", bacnet_devices)
+            _LOGGER.info("[BACnet DEBUG] entry.options keys: %s", list(entry.options.keys()))
             if bacnet_devices:
-                _LOGGER.error("[BACnet DEBUG] First device entities count: %d", len(bacnet_devices[0].get("entities", [])))
-                _LOGGER.error("[BACnet DEBUG] First device full data: %s", bacnet_devices[0])
+                _LOGGER.info("[BACnet DEBUG] First device entities count: %d", len(bacnet_devices[0].get("entities", [])))
+                _LOGGER.info("[BACnet DEBUG] First device full data: %s", bacnet_devices[0])
 
             if not bacnet_devices:
-                _LOGGER.error("No BACnet devices configured - skipping")
+                _LOGGER.debug("No BACnet devices configured - skipping")
                 return False
 
             # For now, only support first device (future: loop through all)
@@ -318,11 +327,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     return False
             except OSError as err:
                 if err.errno == 98:  # Address already in use
-                    _LOGGER.error("Port 47808 is already in use! This usually means:")
-                    _LOGGER.error("  1. Another BACnet integration entry is still loading")
-                    _LOGGER.error("  2. A previous entry wasn't cleaned up properly")
-                    _LOGGER.error("  3. Another application is using port 47808")
-                    _LOGGER.error("Solution: Restart Home Assistant to clear all BACnet connections")
+                    _LOGGER.warning("Port 47808 is already in use!")
+                    _LOGGER.warning("Solution: Restart Home Assistant to clear all BACnet connections")
                     return False
                 raise
 
@@ -429,18 +435,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Platforms
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    
-    # Services (register once)
-    if not hass.data[DOMAIN].get("services_registered"):
-        await async_setup_services(hass)
-        hass.data[DOMAIN]["services_registered"] = True
-    
-    # Frontend (register once, not per entry)
-    if not hass.data[DOMAIN].get("frontend_registered"):
-        await async_install_frontend_resource(hass)
+
+    # Register Lovelace card (needs entry parameter, so done here on first entry)
+    if not hass.data[DOMAIN].get("card_registered"):
         await async_register_card(hass, entry)
-        hass.data[DOMAIN]["frontend_registered"] = True
-    
+        hass.data[DOMAIN]["card_registered"] = True
+
     return True
 
 
