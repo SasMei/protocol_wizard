@@ -280,18 +280,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Create device registry entries for each slave
             device_registry = dr.async_get(hass)
             for coordinator_key, slave_name, slave_id in coordinators_created:
-                devicename = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
-                if len(slaves) > 1:
-                    devicename = f"{devicename} - {slave_name}"
+                hub_name = entry.title or entry.data.get(CONF_NAME) or f"{protocol_name.title()} Device"
+                # Always include slave name for clarity (even for single slave)
+                devicename = f"{hub_name} - {slave_name}"
 
-                device_registry.async_get_or_create(
-                    config_entry_id=entry.entry_id,
-                    identifiers={(DOMAIN, coordinator_key)},
-                    name=devicename,
-                    manufacturer=protocol_name.title(),
-                    model=f"Protocol Wizard (Slave {slave_id})",
-                    configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
-                )
+                # Check if device already exists (may need name update after adding slaves)
+                existing_device = device_registry.async_get_device(identifiers={(DOMAIN, coordinator_key)})
+                if existing_device:
+                    # Update name if it changed (e.g., was "Hub" now should be "Hub - Slave 1")
+                    if existing_device.name != devicename:
+                        device_registry.async_update_device(existing_device.id, name=devicename)
+                else:
+                    device_registry.async_get_or_create(
+                        config_entry_id=entry.entry_id,
+                        identifiers={(DOMAIN, coordinator_key)},
+                        name=devicename,
+                        manufacturer=protocol_name.title(),
+                        model=f"Protocol Wizard (Slave {slave_id})",
+                        configuration_url=f"homeassistant://config/integrations/integration/{entry.entry_id}",
+                    )
 
             # Platforms (forward to all platforms once for all slaves)
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

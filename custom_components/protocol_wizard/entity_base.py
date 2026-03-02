@@ -670,7 +670,7 @@ def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):
     Returns list of (coordinator, device_info) tuples.
     Handles multi-slave Modbus and multi-device BACnet.
     """
-    from .const import DOMAIN
+    from .const import DOMAIN, CONF_SLAVES, CONF_PROTOCOL, CONF_PROTOCOL_MODBUS
     from homeassistant.helpers.entity import DeviceInfo
 
     coordinator_keys = hass.data[DOMAIN].get("entry_coordinator_keys", {}).get(
@@ -681,9 +681,23 @@ def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):
         coordinator = hass.data[DOMAIN]["coordinators"].get(key)
         if coordinator:
             device_identifier = getattr(coordinator, 'coordinator_key', key)
+
+            # Build device name with slave/device context
+            hub_name = entry.title or f"{coordinator.protocol_name.title()} Device"
+            device_name = hub_name
+
+            # For Modbus, include slave name
+            if entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MODBUS:
+                slaves = entry.options.get(CONF_SLAVES, [])
+                slave_idx = getattr(coordinator, 'slave_index', 0)
+                if slaves and slave_idx < len(slaves):
+                    slave_info = slaves[slave_idx]
+                    slave_name = slave_info.get("name", f"Slave {slave_info.get('slave_id', slave_idx + 1)}")
+                    device_name = f"{hub_name} - {slave_name}"
+
             device_info = DeviceInfo(
                 identifiers={(DOMAIN, device_identifier)},
-                name=entry.title or f"{coordinator.protocol_name.title()} Device",
+                name=device_name,
                 manufacturer=coordinator.protocol_name.title(),
                 model="Protocol Wizard",
             )
