@@ -542,7 +542,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
                 parity=config.get(CONF_PARITY, DEFAULT_PARITY),
                 stopbits=config.get(CONF_STOPBITS, DEFAULT_STOPBITS),
                 bytesize=config.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
     elif connection_type == CONNECTION_TYPE_IP and protocol == CONNECTION_TYPE_UDP:
         key = f"ip_udp:{config[CONF_HOST]}:{config[CONF_PORT]}"
@@ -552,7 +553,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
             hass.data[DOMAIN]["connections"][key] = AsyncModbusUdpClient(
                 host=config[CONF_HOST],
                 port=config[CONF_PORT],
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
     else:  # TCP
         key = f"ip_tcp:{config[CONF_HOST]}:{config[CONF_PORT]}"
@@ -562,7 +564,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
             hass.data[DOMAIN]["connections"][key] = AsyncModbusTcpClient(
                 host=config[CONF_HOST],
                 port=config[CONF_PORT],
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
 
     pymodbus_client = hass.data[DOMAIN]["connections"][key]
