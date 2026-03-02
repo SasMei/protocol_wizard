@@ -1,0 +1,155 @@
+[
+  {
+    "name": "Relay Control 1",
+    "address": 0,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 1 Off",
+      "1": "Relay 1 On"
+    }
+  },
+  {
+    "name": "Relay Control 2",
+    "address": 1,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 2 Off",
+      "1": "Relay 2 On"
+    }
+  },
+  {
+    "name": "Relay Control 3",
+    "address": 2,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 3 Off",
+      "1": "Relay 3 On"
+    }
+  },
+  {
+    "name": "Relay Control 4",
+    "address": 3,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 4 Off",
+      "1": "Relay 4 On"
+    }
+  },
+  {
+    "name": "Relay Control 5",
+    "address": 4,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 5 Off",
+      "1": "Relay 5 On"
+    }
+  },
+  {
+    "name": "Relay Control 6",
+    "address": 5,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 6 Off",
+      "1": "Relay 6 On"
+    }
+  },
+  {
+    "name": "Relay Control 7",
+    "address": 6,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 7 Off",
+      "1": "Relay 7 On"
+    }
+  },
+  {
+    "name": "Relay Control 8",
+    "address": 7,
+    "data_type": "uint16",
+    "register_type": "coil",
+    "rw": "rw",
+    "allow_bits": false,
+    "options": {
+      "0": "Relay 8 Off",
+      "1": "Relay 8 On"
+    }
+  },
+  {
+    "name": "Digital Input 1",
+    "address": 4096,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 2",
+    "address": 4097,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 3",
+    "address": 4098,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 4",
+    "address": 4099,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 5",
+    "address": 4100,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 6",
+    "address": 4101,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 7",
+    "address": 4102,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  },
+  {
+    "name": "Digital Input 8",
+    "address": 4103,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "r"
+  }
+
+]

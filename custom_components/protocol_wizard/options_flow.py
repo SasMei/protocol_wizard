@@ -32,6 +32,7 @@ from .const import (
     CONF_WORD_ORDER,
     CONF_REGISTER_TYPE,
     CONF_SLAVES,
+    CONF_BACNET_DEVICES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         return self._config_entry
     
     def _load_entities_for_context(self) -> list[dict]:
-        """Load entities based on current context (slave or global)."""
+        """Load entities based on current context (slave/device or global)."""
         if self.protocol == CONF_PROTOCOL_MODBUS:
             # Check if we're in slave context
             if self._selected_slave_index is not None:
@@ -81,8 +82,16 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 return []
             # No slaves yet - backward compat mode
             return list(self._config_entry.options.get(CONF_REGISTERS, []))
+        elif self.protocol == CONF_PROTOCOL_BACNET:
+            # BACnet uses bacnet_devices structure (similar to Modbus slaves)
+            bacnet_devices = self._config_entry.options.get(CONF_BACNET_DEVICES, [])
+            if bacnet_devices and len(bacnet_devices) > 0:
+                # Load from first device's entities
+                return list(bacnet_devices[0].get('entities', []))
+            # Fallback to old structure (backward compat)
+            return list(self._config_entry.options.get(CONF_ENTITIES, []))
         else:
-            # Non-Modbus protocols
+            # Other protocols (SNMP, MQTT, etc.)
             return list(self._config_entry.options.get(CONF_ENTITIES, []))
         
     @staticmethod
@@ -111,9 +120,9 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 # Show slave management menu (allows adding more slaves)
                 slave_count = len(slaves)
                 if slave_count == 1:
-                    menu_options["select_slave"] = f"⚙️ Manage Slaves (1 slave, add more)"
+                    menu_options["select_slave"] = "Manage Slaves (1 slave, add more)"
                 else:
-                    menu_options["select_slave"] = f"⚙️ Manage Slaves ({slave_count} slaves)"
+                    menu_options["select_slave"] = f"Manage Slaves ({slave_count} slaves)"
 
                 # If single slave, also show entity shortcuts for convenience
                 if slave_count == 1:
@@ -186,8 +195,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
             name = slave.get('name', f"Slave {slave['slave_id']}")
             slave_id = slave['slave_id']
             entity_count = len(slave.get('registers', []))
-            options[f"configure_{idx}"] = f"⚙️ {name} (ID {slave_id}) - {entity_count} entities"
-            options[f"delete_{idx}"] = f"🗑️ Delete: {name} (ID {slave_id})"
+            options[f"configure_{idx}"] = f"{name} (ID {slave_id}) - {entity_count} entities"
+            options[f"delete_{idx}"] = f"Delete: {name} (ID {slave_id})"
         
         return self.async_show_form(
             step_id="select_slave",
@@ -208,8 +217,8 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
         if not slaves or self._selected_slave_index >= len(slaves):
             return await self.async_step_init()
         
-        slave = slaves[self._selected_slave_index]
-        slave_name = slave.get('name', f"Slave {slave['slave_id']}")
+  #      slave = slaves[self._selected_slave_index]
+   #     slave_name = slave.get('name', f"Slave {slave['slave_id']}")
         
         menu_options = {
             "add_entity": "Add entity",
@@ -596,7 +605,7 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
 
     def _save_entities(self):
         options = dict(self._config_entry.options)
-        
+
         if self.protocol == CONF_PROTOCOL_MODBUS:
             # Check if we're in slave context
             if self._selected_slave_index is not None:
@@ -615,8 +624,21 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 else:
                     # True backward compat: no slaves exist yet
                     options[CONF_REGISTERS] = self._entities
+        elif self.protocol == CONF_PROTOCOL_BACNET:
+            # BACnet uses bacnet_devices structure (similar to Modbus slaves)
+            bacnet_devices = list(options.get(CONF_BACNET_DEVICES, []))
+            if bacnet_devices:
+                # Save to first device's entities
+                bacnet_devices[0]['entities'] = self._entities
+                options[CONF_BACNET_DEVICES] = bacnet_devices
+                _LOGGER.info("[Options Flow] Saved %d entities to BACnet device %d",
+                            len(self._entities), bacnet_devices[0]['device_id'])
+            else:
+                # Fallback to old structure (shouldn't happen)
+                options[CONF_ENTITIES] = self._entities
+                _LOGGER.warning("[Options Flow] No bacnet_devices found, using fallback")
         else:
-            # Non-Modbus
+            # Other protocols (SNMP, MQTT, etc.)
             options[CONF_ENTITIES] = self._entities
         
         # Update entry (synchronous)
