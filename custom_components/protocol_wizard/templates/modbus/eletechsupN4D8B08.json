@@ -105,7 +105,7 @@
     "scale": 1.0,
     "offset": 0.0,
     "device_class": "switch",
-    "icon": "mdi:toggle-switch"
+    "icon": "mdi:toggle-switch",
     "options": {
       "0": "Close",
       "1": "Open",
@@ -222,7 +222,7 @@
     "unit": "",
     "scale": 1.0,
     "offset": 0.0,
-    "icon": "mdi:cog"
+    "icon": "mdi:cog",
     "options": {
       "0": "Unrelated",
       "1": "Self-Locking",
@@ -239,7 +239,7 @@
     "unit": "",
     "scale": 1.0,
     "offset": 0.0,
-    "icon": "mdi:speedometer"
+    "icon": "mdi:speedometer",
     "options": {
       "0": "1200",
       "1": "2400",
