@@ -583,11 +583,7 @@ class BACnetClient:
                 return result
                 
             except asyncio.TimeoutError:
-                _LOGGER.error("Read timed out after 5 seconds - no response from %s", device_address)
-                _LOGGER.error("This means:")
-                _LOGGER.error("  1. Device is not responding")
-                _LOGGER.error("  2. Network/firewall is blocking BACnet traffic")
-                _LOGGER.error("  3. Device is on different subnet")
+                _LOGGER.debug("Read timed out after 5 seconds - no response from %s", device_address)
                 return None
         
         except Exception as err:

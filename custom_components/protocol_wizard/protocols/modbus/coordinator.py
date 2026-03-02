@@ -66,19 +66,19 @@ class ModbusCoordinator(BaseProtocolCoordinator):
             slaves = self.my_config_entry.options.get(CONF_SLAVES, [])
             if slaves and self.slave_index < len(slaves):
                 entities = slaves[self.slave_index].get('registers', [])
-                _LOGGER.info("========== LOADED %d ENTITIES FOR SLAVE %d (INDEX %d) ==========", 
+                _LOGGER.debug("Loaded %d entities for slave %d (index %d)",
                              len(entities), self.slave_id, self.slave_index)
             else:
-                _LOGGER.warning("========== SLAVE INDEX %d NOT FOUND! TOTAL SLAVES: %d ==========", 
+                _LOGGER.warning("Slave index %d not found, total slaves: %d",
                                self.slave_index, len(slaves))
                 entities = []
         else:
             # Backward compatibility: single slave mode, read from global CONF_REGISTERS
             entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
-            _LOGGER.info("========== LOADED %d ENTITIES FROM CONF_REGISTERS (BACKWARD COMPAT) ==========", len(entities))
+            _LOGGER.debug("Loaded %d entities from CONF_REGISTERS (backward compat)", len(entities))
         
         if not entities:
-            _LOGGER.warning("========== NO ENTITIES TO READ! ==========")
+            _LOGGER.debug("No entities to read")
             return {}
 
         new_data = {}

@@ -10,20 +10,17 @@
         }
       },
       "modbus_common": {
-        "title": "Modbus Device Configuration",
-        "description": "Common settings for Modbus devices.",
+        "title": "Modbus Hub Configuration",
+        "description": "Configure the Modbus hub connection. Devices (slaves) are added in the next step.",
         "data": {
-          "name": "Device Name",
+          "name": "Hub Name",
           "connection_type": "Connection Type",
-          "slave_id": "Slave ID",
-          "first_reg": "First Register Address (for connection test)",
-          "first_reg_size": "Number of Registers to Read (for connection test)",
           "update_interval": "Update Interval (seconds)"
         }
       },
       "modbus_serial": {
         "title": "Modbus Serial Configuration",
-        "description": "Serial port settings.",
+        "description": "Serial port settings for the hub.",
         "data": {
           "serial_port": "Serial Port",
           "baudrate": "Baud Rate",
@@ -34,11 +31,23 @@
       },
       "modbus_ip": {
         "title": "Modbus TCP/UDP Configuration",
-        "description": "Network settings.",
+        "description": "Network settings for the hub.",
         "data": {
           "host": "Host / IP Address",
           "port": "Port",
           "transport_type": "Transport Type"
+        }
+      },
+      "modbus_device": {
+        "title": "First Modbus Device (Slave)",
+        "description": "Configure the first device on this hub. You can add more devices later via options.",
+        "data": {
+          "slave_id": "Slave ID",
+          "device_name": "Device Name (optional)",
+          "use_template": "Use a template",
+          "template": "Template",
+          "first_register": "First Register Address (for connection test)",
+          "first_register_size": "Number of Registers to Read (for connection test)"
         }
       },
       "snmp_common": {
@@ -278,6 +287,14 @@
           "device_id": "Device ID (Instance)",
           "port": "UDP Port",
           "network_number": "Network Number (Optional)"
+        }
+      },
+      "bacnet_template": {
+        "title": "BACnet Template Selection",
+        "description": "Optionally select a template to pre-configure entities for this device.",
+        "data": {
+          "use_template": "Use a template",
+          "template": "Template"
         }
       }
     }

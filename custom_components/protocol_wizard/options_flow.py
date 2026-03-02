@@ -143,9 +143,15 @@ class ProtocolWizardOptionsFlow(config_entries.OptionsFlow):
                 menu_options["list_entities"] = f"Entities ({len(self._entities)})"
                 menu_options["edit_entity"] = "Edit entity"
 
-        # Template options (always available)
+        # Template options
+        # For multi-slave Modbus, only show template options if single slave or within slave context
+        if self.protocol == CONF_PROTOCOL_MODBUS:
+            slaves = self._config_entry.options.get(CONF_SLAVES, [])
+            if len(slaves) <= 1:
+                menu_options["load_template"] = "Load template"
+        else:
+            menu_options["load_template"] = "Load template"
         menu_options.update({
-            "load_template": "Load template",
             "export_template": "Export template",
             "delete_template": "Delete user template",
         })
