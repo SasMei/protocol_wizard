@@ -1,7 +1,10 @@
 ## Changelog
 ### [0.7.3] - Ehanced Template Handling
-- Multimaster for modbus serial
-- ground work for adding BACNET (not enabled yet)
+- Needs re-install of your devices (should be less painfull then it sounds)
+     - Make sure you export your exotic device to a template if you have not done so first!
+- Multimaster for modbus serial should now be functional.
+- Better hub and multi-device setup for Modbus
+- Ground work for adding BACNET. Partly functional atm.
 
 ### [0.7.0] - Ehanced Template Handling
 - User specific template can be chosen and store separately
