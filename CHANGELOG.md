@@ -1,4 +1,7 @@
 ## Changelog
+### [0.7.3] - Ehanced Template Handling
+- Multimaster for modbus serial
+- ground work for adding BACNET (not enabled yet)
 
 ### [0.7.0] - Ehanced Template Handling
 - User specific template can be chosen and store separately
