@@ -27,6 +27,7 @@ from .const import (
     CONF_PROTOCOL_BACNET,
     CONF_PROTOCOL,
     CONF_SLAVES,
+    CONF_BACNET_DEVICES,
 )
 from .protocols.base import BaseProtocolCoordinator
 
@@ -215,8 +216,31 @@ class BaseEntityManager(ABC):
                 current_configs = self.entry.options.get(config_key, [])
                 _LOGGER.debug("Reading entities from old structure (%s): %d entities",
                              config_key, len(current_configs))
+        elif protocol == CONF_PROTOCOL_BACNET:
+            # BACnet multi-device mode: get entities from coordinator's device
+            bacnet_devices = self.entry.options.get(CONF_BACNET_DEVICES, [])
+            if bacnet_devices:
+                # Multi-device mode: get entities from coordinator's device
+                if hasattr(self.coordinator, 'device_index'):
+                    device_index = self.coordinator.device_index
+                    if device_index < len(bacnet_devices):
+                        current_configs = bacnet_devices[device_index].get('entities', [])
+                        _LOGGER.debug("Reading entities from BACnet device %d (index %d): %d entities",
+                                     bacnet_devices[device_index].get('device_id'), device_index, len(current_configs))
+                    else:
+                        _LOGGER.warning("BACnet device index %d out of range (total devices: %d)",
+                                       device_index, len(bacnet_devices))
+                        current_configs = []
+                else:
+                    # Single device mode (backward compatibility)
+                    current_configs = bacnet_devices[0].get('entities', [])
+                    _LOGGER.debug("Reading entities from single BACnet device: %d entities", len(current_configs))
+            else:
+                # Old structure fallback (shouldn't happen after migration)
+                current_configs = self.entry.options.get(CONF_ENTITIES, [])
+                _LOGGER.debug("Reading entities from old BACnet structure: %d entities", len(current_configs))
         else:
-            # Non-Modbus protocols use the config key directly
+            # Other protocols (SNMP, MQTT, etc.) use the config key directly
             current_configs = self.entry.options.get(config_key, [])
 
         desired_ids = set()
