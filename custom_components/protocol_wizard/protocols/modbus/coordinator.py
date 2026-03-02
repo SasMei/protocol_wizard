@@ -52,25 +52,40 @@ class ModbusCoordinator(BaseProtocolCoordinator):
     # ----------------------------------------------------------------
     # Connection Management with Recovery
     # ----------------------------------------------------------------
-    async def _async_connect(self) -> bool:
+    async def _async_connect_unlocked(self) -> bool:
         """
         Ensure client is connected, with automatic recovery after errors.
-        Overrides base implementation to handle Modbus-specific reconnection.
+        MUST be called while holding self._lock to prevent race conditions.
         """
         # Check if reconnection is needed due to previous errors
-        if hasattr(self.client, 'needs_reconnect') and self.client.needs_reconnect:
-            _LOGGER.info("[Modbus] Connection recovery needed, attempting reconnect...")
+        if self.client.needs_reconnect:
+            slave_id = getattr(self, 'slave_id', '?')
+            _LOGGER.info("[Modbus] Slave %s: Connection recovery needed, attempting reconnect...", slave_id)
             return await self.client.reconnect()
 
-        # Normal connection check
+        # Check if already connected
         if self.client.is_connected:
             return True
 
+        # Need to connect
         try:
             return await self.client.connect()
         except Exception as err:
             _LOGGER.error("[Modbus] Failed to connect: %s", err)
             return False
+
+    async def _async_connect(self) -> bool:
+        """
+        Ensure client is connected (acquires lock internally).
+        For use by _async_update_data which handles its own locking for reads.
+        """
+        # Fast path: if connected and healthy, return immediately (no lock needed)
+        if self.client.is_connected and not self.client.needs_reconnect:
+            return True
+
+        # Need to do connection work - acquire the bus lock
+        async with self._lock:
+            return await self._async_connect_unlocked()
 
     # ----------------------------------------------------------------
     # BaseProtocolCoordinator Implementation
@@ -78,10 +93,6 @@ class ModbusCoordinator(BaseProtocolCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch latest data from configured entities."""
 
-        if not await self._async_connect():
-            _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
-            return {}
-        
         # Get entities for THIS SPECIFIC SLAVE
         # Check if we have slave_id set (multi-slave mode)
         if hasattr(self, 'slave_id') and hasattr(self, 'slave_index'):
@@ -99,7 +110,7 @@ class ModbusCoordinator(BaseProtocolCoordinator):
             # Backward compatibility: single slave mode, read from global CONF_REGISTERS
             entities = self.my_config_entry.options.get(CONF_REGISTERS, [])
             _LOGGER.debug("Loaded %d entities from CONF_REGISTERS (backward compat)", len(entities))
-        
+
         if not entities:
             _LOGGER.debug("No entities to read")
             return {}
@@ -109,7 +120,11 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         consecutive_failures = 0
         max_consecutive_failures = 2
 
+        # Single lock acquisition for entire update cycle: connect + all reads
         async with self._lock:
+            if not await self._async_connect_unlocked():
+                _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
+                return {}
             for entity in entities:
                 # Early abort if device is clearly dead
                 if consecutive_failures >= max_consecutive_failures:
@@ -357,15 +372,18 @@ class ModbusCoordinator(BaseProtocolCoordinator):
     async def async_read_entity(self, address: str, entity_config: dict, **kwargs) -> Any | None:
         from pymodbus.exceptions import ModbusIOException
 
-        if not await self._async_connect():
-            return None
-
         addr = int(address)
         size = kwargs.get("size") or TYPE_SIZES.get(entity_config.get("data_type", "uint16").lower(), 1)
         reg_type = kwargs.get("register_type") or entity_config.get("register_type", "holding")
         raw = kwargs.get("raw", False)
 
+        # Single lock acquisition for entire operation: connect + read
+        # This prevents race conditions when multiple slaves share the same connection
         async with self._lock:
+            # Check/repair connection while holding lock
+            if not await self._async_connect_unlocked():
+                return None
+
             values = None
             detected_type = reg_type
 
@@ -410,25 +428,24 @@ class ModbusCoordinator(BaseProtocolCoordinator):
             return self._decode_value(values, entity_config)
     
     async def async_write_entity(self, address: str, value: Any, entity_config: dict, **kwargs) -> bool:
-        if not await self._async_connect():
-            _LOGGER.error("Write failed – could not connect to device")
-            return False
-    
         encoded_value = self._encode_value(value, entity_config)
         if encoded_value is None:
             _LOGGER.error("Write failed – encoding returned None for value %r", value)
             return False
-    
-    
-        # _LOGGER.debug("Calling client.write: address=%s, encoded=%r, register_type=%s", address, encoded_value, entity_config.get("register_type", "holding"))
-    
-        success = await self.client.write(
-            address=address,
-            value=encoded_value,
-            register_type=entity_config.get("register_type", "holding"),
-        )
-    
-        if not success:
-            _LOGGER.error("client.write returned False – check device logs or connection")
+
+        # Single lock acquisition for entire operation: connect + write
+        async with self._lock:
+            if not await self._async_connect_unlocked():
+                _LOGGER.error("Write failed – could not connect to device")
+                return False
+
+            success = await self.client.write(
+                address=address,
+                value=encoded_value,
+                register_type=entity_config.get("register_type", "holding"),
+            )
+
+            if not success:
+                _LOGGER.error("client.write returned False – check device logs or connection")
         
         return success

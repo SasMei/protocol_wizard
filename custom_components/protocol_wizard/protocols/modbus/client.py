@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from typing import Any
 
 from pymodbus.exceptions import ModbusIOException
@@ -16,6 +17,24 @@ _LOGGER = logging.getLogger(__name__)
 # Setting parent logger to CRITICAL to catch all sub-loggers
 logging.getLogger("pymodbus").setLevel(logging.CRITICAL)
 logging.getLogger("pymodbus.logging").setLevel(logging.CRITICAL)
+
+# Shared connection state - keyed by pymodbus client id
+# This ensures all ModbusClient wrappers sharing the same pymodbus client
+# see the same connection state
+_CONNECTION_STATE: dict[int, dict] = {}
+
+
+def _get_connection_state(pymodbus_client) -> dict:
+    """Get or create shared connection state for a pymodbus client."""
+    client_id = id(pymodbus_client)
+    if client_id not in _CONNECTION_STATE:
+        _CONNECTION_STATE[client_id] = {
+            "failed": False,
+            "reconnecting": False,
+            "lock": asyncio.Lock(),  # Per-connection reconnection lock
+        }
+    return _CONNECTION_STATE[client_id]
+
 
 class ModbusClient(BaseProtocolClient):
     """Wrapper for pymodbus clients to match BaseProtocolClient interface."""
@@ -30,17 +49,19 @@ class ModbusClient(BaseProtocolClient):
         """
         self._client = pymodbus_client
         self.slave_id = int(slave_id)
-        self._connection_failed = False  # Track connection health
+        # Get shared connection state for this pymodbus client
+        self._conn_state = _get_connection_state(pymodbus_client)
 
     async def connect(self) -> bool:
         """Establish connection."""
         try:
-            await self._client.connect()
-            self._connection_failed = False
+            if not self._client.connected:
+                await self._client.connect()
+            self._conn_state["failed"] = False
             return self._client.connected
         except Exception as err:
             _LOGGER.error("Modbus connection failed: %s", err)
-            self._connection_failed = True
+            self._conn_state["failed"] = True
             return False
 
     async def disconnect(self) -> None:
@@ -48,33 +69,53 @@ class ModbusClient(BaseProtocolClient):
         try:
             if self._client.connected:
                 self._client.close()
-            self._connection_failed = False
+            self._conn_state["failed"] = False
         except Exception as err:
             _LOGGER.debug("Error closing Modbus client: %s", err)
 
     async def reconnect(self) -> bool:
-        """Force reconnection - close and reopen."""
-        _LOGGER.info("Forcing Modbus reconnection...")
-        try:
-            # Force close regardless of state
+        """Force reconnection - close and reopen.
+
+        Uses a lock to ensure only one reconnection happens at a time
+        across all slaves sharing this connection.
+        """
+        # Use the shared reconnection lock to prevent multiple simultaneous reconnects
+        async with self._conn_state["lock"]:
+            # Double-check if still needed (another slave might have reconnected)
+            if not self._conn_state["failed"] and self._client.connected:
+                _LOGGER.debug("Connection already recovered by another slave")
+                return True
+
+            if self._conn_state["reconnecting"]:
+                _LOGGER.debug("Reconnection already in progress, waiting...")
+                # Wait a bit for the other reconnection to complete
+                await asyncio.sleep(1.0)
+                return self._client.connected
+
+            self._conn_state["reconnecting"] = True
+            _LOGGER.info("Forcing Modbus reconnection (slave %d)...", self.slave_id)
+
             try:
-                self._client.close()
-            except Exception:
-                pass
+                # Force close regardless of state
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
 
-            # Small delay before reconnecting
-            import asyncio
-            await asyncio.sleep(0.5)
+                # Small delay before reconnecting
+                await asyncio.sleep(0.3)
 
-            # Reconnect
-            await self._client.connect()
-            self._connection_failed = False
-            _LOGGER.info("Modbus reconnection successful")
-            return self._client.connected
-        except Exception as err:
-            _LOGGER.error("Modbus reconnection failed: %s", err)
-            self._connection_failed = True
-            return False
+                # Reconnect
+                await self._client.connect()
+                self._conn_state["failed"] = False
+                _LOGGER.info("Modbus reconnection successful")
+                return self._client.connected
+            except Exception as err:
+                _LOGGER.error("Modbus reconnection failed: %s", err)
+                self._conn_state["failed"] = True
+                return False
+            finally:
+                self._conn_state["reconnecting"] = False
 
     async def read(self, address: str, **kwargs) -> Any:
         """
@@ -109,8 +150,8 @@ class ModbusClient(BaseProtocolClient):
             if result.isError():
                 return None
 
-            # Success - mark connection as healthy
-            self._connection_failed = False
+            # Success - mark connection as healthy (shared state)
+            self._conn_state["failed"] = False
 
             # Return registers or bits depending on type
             if reg_type in ("coil", "discrete"):
@@ -118,18 +159,19 @@ class ModbusClient(BaseProtocolClient):
             return result.registers[:count]
 
         except ModbusIOException as err:
-            _LOGGER.warning("Modbus I/O error reading address %s: %s", address, err)
-            self._connection_failed = True  # Mark for reconnection
+            _LOGGER.warning("Modbus I/O error reading address %s (slave %d): %s",
+                          address, self.slave_id, err)
+            self._conn_state["failed"] = True  # Mark shared state for reconnection
             raise  # Re-raise so coordinator can handle
         except Exception as err:
-            _LOGGER.error("Modbus read error at %s: %s", address, err)
-            self._connection_failed = True
+            _LOGGER.error("Modbus read error at %s (slave %d): %s",
+                         address, self.slave_id, err)
+            self._conn_state["failed"] = True
             raise
 
     async def write(self, address: str, value: Any, **kwargs) -> bool:
         addr = int(address)
         reg_type = kwargs.get("register_type", "holding").lower()
-     #   _LOGGER.debug("write called: addr=%s, value=%r (type=%s), reg_type=%s", addr, value, type(value).__name__, reg_type)
         try:
             if reg_type == "coil":
                 if isinstance(value, list):
@@ -166,30 +208,31 @@ class ModbusClient(BaseProtocolClient):
 
             success = not result.isError()
             if success:
-                self._connection_failed = False
+                self._conn_state["failed"] = False
             return success
 
         except ModbusIOException as err:
-            _LOGGER.warning("Modbus I/O error writing to %s: %s", address, err)
-            self._connection_failed = True
+            _LOGGER.warning("Modbus I/O error writing to %s (slave %d): %s",
+                          address, self.slave_id, err)
+            self._conn_state["failed"] = True
             return False
         except Exception as err:
-            _LOGGER.error("Modbus write failed at %s: %s", address, err)
-            self._connection_failed = True
+            _LOGGER.error("Modbus write failed at %s (slave %d): %s",
+                         address, self.slave_id, err)
+            self._conn_state["failed"] = True
             return False
 
     @property
     def is_connected(self) -> bool:
-        """Check if connected and healthy."""
-        # Consider connection unhealthy if we've had I/O errors
-        if self._connection_failed:
+        """Check if connected and healthy (uses shared state)."""
+        if self._conn_state["failed"]:
             return False
         return self._client.connected
 
     @property
     def needs_reconnect(self) -> bool:
-        """Check if reconnection is needed due to errors."""
-        return self._connection_failed
+        """Check if reconnection is needed due to errors (uses shared state)."""
+        return self._conn_state["failed"]
 
     # Expose underlying client for protocol-specific methods
     @property
