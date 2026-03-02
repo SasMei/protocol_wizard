@@ -647,8 +647,29 @@ class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         # Include coordinator_key in unique_id for multi-slave/multi-device
         coordinator_key = getattr(coordinator, 'coordinator_key', entry.entry_id)
-        self._attr_unique_id = f"{coordinator_key}_hub"
-        self._attr_name = f"{coordinator.protocol_name.title()} Hub"
+        protocol = coordinator.protocol_name
+
+        # Get slave/device identifier for multi-device scenarios
+        slave_id = getattr(coordinator, 'slave_id', None)
+        device_index = getattr(coordinator, 'device_index', None)
+
+        # Build unique_id that includes protocol for uniqueness
+        self._attr_unique_id = f"{coordinator_key}_{protocol}_hub"
+        self._attr_name = f"{protocol.title()} Hub"
+
+        # CRITICAL: Set suggested_object_id to ensure entity_id ends with _{protocol}_hub
+        # This is required for the frontend card's protocol detection (_getProtocol)
+        # which checks if entity_id ends with "_modbus_hub", "_snmp_hub", etc.
+        if slave_id is not None:
+            # Modbus multi-slave: include slave_id for unique entity_id
+            self._attr_suggested_object_id = f"slave_{slave_id}_{protocol}_hub"
+        elif device_index is not None:
+            # BACnet/other multi-device: include device_index
+            self._attr_suggested_object_id = f"device_{device_index}_{protocol}_hub"
+        else:
+            # Single device mode: just protocol_hub
+            self._attr_suggested_object_id = f"{protocol}_hub"
+
         self._attr_device_info = device_info
         self._attr_extra_state_attributes = {
             "protocol": self.coordinator.protocol_name,
@@ -670,7 +691,7 @@ def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):
     Returns list of (coordinator, device_info) tuples.
     Handles multi-slave Modbus and multi-device BACnet.
     """
-    from .const import DOMAIN
+    from .const import DOMAIN, CONF_SLAVES, CONF_PROTOCOL, CONF_PROTOCOL_MODBUS
     from homeassistant.helpers.entity import DeviceInfo
 
     coordinator_keys = hass.data[DOMAIN].get("entry_coordinator_keys", {}).get(
@@ -681,9 +702,23 @@ def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):
         coordinator = hass.data[DOMAIN]["coordinators"].get(key)
         if coordinator:
             device_identifier = getattr(coordinator, 'coordinator_key', key)
+
+            # Build device name with slave/device context
+            hub_name = entry.title or f"{coordinator.protocol_name.title()} Device"
+            device_name = hub_name
+
+            # For Modbus, include slave name
+            if entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MODBUS:
+                slaves = entry.options.get(CONF_SLAVES, [])
+                slave_idx = getattr(coordinator, 'slave_index', 0)
+                if slaves and slave_idx < len(slaves):
+                    slave_info = slaves[slave_idx]
+                    slave_name = slave_info.get("name", f"Slave {slave_info.get('slave_id', slave_idx + 1)}")
+                    device_name = f"{hub_name} - {slave_name}"
+
             device_info = DeviceInfo(
                 identifiers={(DOMAIN, device_identifier)},
-                name=entry.title or f"{coordinator.protocol_name.title()} Device",
+                name=device_name,
                 manufacturer=coordinator.protocol_name.title(),
                 model="Protocol Wizard",
             )
