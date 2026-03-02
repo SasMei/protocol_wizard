@@ -14,6 +14,7 @@ from .entity_base import (
     BaseEntityManager,
     ProtocolWizardSensorBase,
     ProtocolWizardHubEntity,
+    get_all_coordinators_for_entry,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,11 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 
 class SensorManager(BaseEntityManager):
     """Manages sensor entities for any protocol."""
-    
+
     def _should_create_entity(self, entity_config: dict) -> bool:
         """Create sensor for read or read-write entities."""
         return entity_config.get("rw", "read") in ("read", "rw")
-    
+
     def _create_entity(self, entity_config: dict, unique_id: str, key: str):
         """Create a sensor entity."""
         return ProtocolWizardSensorBase(
@@ -36,7 +37,7 @@ class SensorManager(BaseEntityManager):
             entity_config=entity_config,
             device_info=self.device_info,
         )
-    
+
     def _get_entity_type_suffix(self) -> str:
         return "sensor"
 
@@ -46,39 +47,30 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ):
-    """Set up sensor entities for any protocol."""
-    coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
+    """Set up sensor entities for all coordinators in this entry."""
+    coordinators = get_all_coordinators_for_entry(hass, entry)
 
-    # Use coordinator_key if available (multi-slave), otherwise use entry.entry_id
-    device_identifier = getattr(coordinator, 'coordinator_key', entry.entry_id)
+    for coordinator, device_info in coordinators:
+        # Add hub status entity per coordinator
+        hub_entity = ProtocolWizardHubEntity(
+            coordinator=coordinator,
+            entry=entry,
+            device_info=device_info,
+        )
+        async_add_entities([hub_entity])
 
-    device_info = DeviceInfo(
-        identifiers={(DOMAIN, device_identifier)},
-        name=entry.title or f"{coordinator.protocol_name.title()} Device",
-        manufacturer=coordinator.protocol_name.title(),
-        model="Protocol Wizard",
-    )
-    
-    # Add hub status entity
-    hub_entity = ProtocolWizardHubEntity(
-        coordinator=coordinator,
-        entry=entry,
-        device_info=device_info,
-    )
-    async_add_entities([hub_entity])
-    
-    # Set up dynamic sensor manager
-    manager = SensorManager(
-        hass=hass,
-        entry=entry,
-        coordinator=coordinator,
-        async_add_entities=async_add_entities,
-        device_info=device_info,
-    )
-    
-    # Initial sync
-    await manager.sync_entities()
-    
-    # Re-sync on options change
-    remove_listener = entry.add_update_listener(manager.handle_options_update)
-    entry.async_on_unload(remove_listener)
+        # Set up dynamic sensor manager
+        manager = SensorManager(
+            hass=hass,
+            entry=entry,
+            coordinator=coordinator,
+            async_add_entities=async_add_entities,
+            device_info=device_info,
+        )
+
+        # Initial sync
+        await manager.sync_entities()
+
+        # Re-sync on options change
+        remove_listener = entry.add_update_listener(manager.handle_options_update)
+        entry.async_on_unload(remove_listener)

@@ -180,11 +180,17 @@ class BaseEntityManager(ABC):
         return name.lower().strip().replace(" ", "_")
     
     def _unique_id(self, entity_config: dict) -> str:
-        """Generate stable unique_id."""
+        """Generate stable unique_id, including slave_id for multi-slave."""
         address = entity_config.get("address", "unknown")
         entity_type = entity_config.get("register_type") or entity_config.get("entity_type", "auto")
         suffix = self._get_entity_type_suffix()
-        return f"{self.entry.entry_id}_{address}_{entity_type}_{suffix}"
+        # Include slave_id/device_index for multi-slave/multi-device to prevent collisions
+        slave_prefix = ""
+        if hasattr(self.coordinator, 'slave_id'):
+            slave_prefix = f"s{self.coordinator.slave_id}_"
+        elif hasattr(self.coordinator, 'device_index') and self.coordinator.device_index > 0:
+            slave_prefix = f"d{self.coordinator.device_index}_"
+        return f"{self.entry.entry_id}_{slave_prefix}{address}_{entity_type}_{suffix}"
     
     async def sync_entities(self) -> None:
         """Create, update, and remove entities based on current config."""
@@ -627,11 +633,11 @@ class ProtocolWizardSelectBase(CoordinatorEntity, SelectEntity):
 
 class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
     """Hub status entity - shows connection state."""
-    
+
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:lan-connect"
-    
+
     def __init__(
         self,
         coordinator: BaseProtocolCoordinator,
@@ -639,18 +645,47 @@ class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
         device_info: DeviceInfo,
     ):
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_hub"
+        # Include coordinator_key in unique_id for multi-slave/multi-device
+        coordinator_key = getattr(coordinator, 'coordinator_key', entry.entry_id)
+        self._attr_unique_id = f"{coordinator_key}_hub"
         self._attr_name = f"{coordinator.protocol_name.title()} Hub"
         self._attr_device_info = device_info
         self._attr_extra_state_attributes = {
             "protocol": self.coordinator.protocol_name,
             "device_id": self.coordinator.config_entry.data.get("device_id"),
         }
-    
+
     @property
     def native_value(self):
         try:
             return "connected" if self.coordinator.client.is_connected else "disconnected"
         except Exception as err:
-            _LOGGER.error("Failed to get hub status: %s", err)
+            _LOGGER.debug("Failed to get hub status: %s", err)
             return "unknown"
+
+
+def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Get all coordinators for a config entry with their device infos.
+
+    Returns list of (coordinator, device_info) tuples.
+    Handles multi-slave Modbus and multi-device BACnet.
+    """
+    from .const import DOMAIN
+    from homeassistant.helpers.entity import DeviceInfo
+
+    coordinator_keys = hass.data[DOMAIN].get("entry_coordinator_keys", {}).get(
+        entry.entry_id, [entry.entry_id]
+    )
+    result = []
+    for key in coordinator_keys:
+        coordinator = hass.data[DOMAIN]["coordinators"].get(key)
+        if coordinator:
+            device_identifier = getattr(coordinator, 'coordinator_key', key)
+            device_info = DeviceInfo(
+                identifiers={(DOMAIN, device_identifier)},
+                name=entry.title or f"{coordinator.protocol_name.title()} Device",
+                manufacturer=coordinator.protocol_name.title(),
+                model="Protocol Wizard",
+            )
+            result.append((coordinator, device_info))
+    return result

@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 
 
 from .const import DOMAIN
-from .entity_base import BaseEntityManager, ProtocolWizardSwitchBase
+from .entity_base import BaseEntityManager, ProtocolWizardSwitchBase, get_all_coordinators_for_entry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ class SwitchManager(BaseEntityManager):
         """Create switch for writeable coils only."""
         reg_type = entity_config.get("register_type", "holding").lower()
         rw = entity_config.get("rw", "read")
-    
-        # If options exist → let select handle it
+
+        # If options exist -> let select handle it
         if entity_config.get("options"):
             return False
 
@@ -46,28 +46,19 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ):
-    """Set up switch entities."""
-    coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
+    """Set up switch entities for all coordinators in this entry."""
+    coordinators = get_all_coordinators_for_entry(hass, entry)
 
-    # Use coordinator_key if available (multi-slave), otherwise use entry.entry_id
-    device_identifier = getattr(coordinator, 'coordinator_key', entry.entry_id)
+    for coordinator, device_info in coordinators:
+        manager = SwitchManager(
+            hass=hass,
+            entry=entry,
+            coordinator=coordinator,
+            async_add_entities=async_add_entities,
+            device_info=device_info,
+        )
 
-    device_info = DeviceInfo(
-        identifiers={(DOMAIN, device_identifier)},
-        name=entry.title or f"{coordinator.protocol_name.title()} Device",
-        manufacturer=coordinator.protocol_name.title(),
-        model="Protocol Wizard",
-    )
+        await manager.sync_entities()
 
-    manager = SwitchManager(
-        hass=hass,
-        entry=entry,
-        coordinator=coordinator,
-        async_add_entities=async_add_entities,
-        device_info=device_info,
-    )
-
-    await manager.sync_entities()
-
-    remove_listener = entry.add_update_listener(manager.handle_options_update)
-    entry.async_on_unload(remove_listener)
+        remove_listener = entry.add_update_listener(manager.handle_options_update)
+        entry.async_on_unload(remove_listener)

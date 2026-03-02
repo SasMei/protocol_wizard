@@ -339,6 +339,18 @@ add_entity:
           step: 0.01
           mode: box
     
+    # Target slave for multi-slave Modbus
+    slave_id:
+      name: Slave ID (Modbus)
+      description: Target slave ID for multi-slave Modbus setups. Defaults to first slave.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 247
+          step: 1
+          mode: box
+
     # Modbus-specific fields
     register_type:
       name: Register Type (Modbus)

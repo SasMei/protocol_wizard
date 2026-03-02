@@ -10,29 +10,29 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
 
 from .const import DOMAIN
-from .entity_base import BaseEntityManager, ProtocolWizardNumberBase
+from .entity_base import BaseEntityManager, ProtocolWizardNumberBase, get_all_coordinators_for_entry
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class NumberManager(BaseEntityManager):
     """Manages number entities for any protocol."""
-    
+
     def _should_create_entity(self, entity_config: dict) -> bool:
         """Create number only for writeable registers that are NOT coils."""
         rw = entity_config.get("rw", "read")
         reg_type = entity_config.get("register_type", "holding").lower()
-    
-        # Do not create number for coils (they are binary → use switch/select)
+
+        # Do not create number for coils (they are binary -> use switch/select)
         if reg_type == "coil":
             return False
 
         # Do not create if it has options (that's a select)
         if entity_config.get("options"):
             return False
-    
+
         return rw in ("write", "rw")
-    
+
     def _create_entity(self, entity_config: dict, unique_id: str, key: str):
         """Create a number entity."""
         return ProtocolWizardNumberBase(
@@ -43,7 +43,7 @@ class NumberManager(BaseEntityManager):
             entity_config=entity_config,
             device_info=self.device_info,
         )
-    
+
     def _get_entity_type_suffix(self) -> str:
         return "number"
 
@@ -53,31 +53,19 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities,
 ):
-    """Set up number entities for any protocol."""
-    coordinator = hass.data[DOMAIN]["coordinators"][entry.entry_id]
+    """Set up number entities for all coordinators in this entry."""
+    coordinators = get_all_coordinators_for_entry(hass, entry)
 
-    # Use coordinator_key if available (multi-slave), otherwise use entry.entry_id
-    device_identifier = getattr(coordinator, 'coordinator_key', entry.entry_id)
+    for coordinator, device_info in coordinators:
+        manager = NumberManager(
+            hass=hass,
+            entry=entry,
+            coordinator=coordinator,
+            async_add_entities=async_add_entities,
+            device_info=device_info,
+        )
 
-    device_info = DeviceInfo(
-        identifiers={(DOMAIN, device_identifier)},
-        name=entry.title or f"{coordinator.protocol_name.title()} Device",
-        manufacturer=coordinator.protocol_name.title(),
-        model="Protocol Wizard",
-    )
-    
-    # Set up dynamic number manager
-    manager = NumberManager(
-        hass=hass,
-        entry=entry,
-        coordinator=coordinator,
-        async_add_entities=async_add_entities,
-        device_info=device_info,
-    )
-    
-    # Initial sync
-    await manager.sync_entities()
-    
-    # Re-sync on options change
-    remove_listener = entry.add_update_listener(manager.handle_options_update)
-    entry.async_on_unload(remove_listener)
+        await manager.sync_entities()
+
+        remove_listener = entry.add_update_listener(manager.handle_options_update)
+        entry.async_on_unload(remove_listener)
