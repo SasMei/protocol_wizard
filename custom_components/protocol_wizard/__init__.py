@@ -608,8 +608,6 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
     def _get_coordinator(call: ServiceCall):
         """Find the right coordinator for a service call."""
-        from homeassistant.helpers import device_registry as dr
-
         # Priority 1: device_id from service data (sent by card)
         device_id = call.data.get("device_id")
         if device_id:
