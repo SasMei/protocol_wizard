@@ -48,7 +48,30 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         
         self.protocol_name = "modbus"
         self._lock = asyncio.Lock()
-    
+
+    # ----------------------------------------------------------------
+    # Connection Management with Recovery
+    # ----------------------------------------------------------------
+    async def _async_connect(self) -> bool:
+        """
+        Ensure client is connected, with automatic recovery after errors.
+        Overrides base implementation to handle Modbus-specific reconnection.
+        """
+        # Check if reconnection is needed due to previous errors
+        if hasattr(self.client, 'needs_reconnect') and self.client.needs_reconnect:
+            _LOGGER.info("[Modbus] Connection recovery needed, attempting reconnect...")
+            return await self.client.reconnect()
+
+        # Normal connection check
+        if self.client.is_connected:
+            return True
+
+        try:
+            return await self.client.connect()
+        except Exception as err:
+            _LOGGER.error("[Modbus] Failed to connect: %s", err)
+            return False
+
     # ----------------------------------------------------------------
     # BaseProtocolCoordinator Implementation
     # ----------------------------------------------------------------
@@ -332,35 +355,46 @@ class ModbusCoordinator(BaseProtocolCoordinator):
     #------------------------------------------------------------------------------
     
     async def async_read_entity(self, address: str, entity_config: dict, **kwargs) -> Any | None:
+        from pymodbus.exceptions import ModbusIOException
+
         if not await self._async_connect():
             return None
-    
+
         addr = int(address)
         size = kwargs.get("size") or TYPE_SIZES.get(entity_config.get("data_type", "uint16").lower(), 1)
         reg_type = kwargs.get("register_type") or entity_config.get("register_type", "holding")
         raw = kwargs.get("raw", False)
-    
+
         async with self._lock:
             values = None
             detected_type = reg_type
-    
-            # If explicitly not auto, just read once
-            if reg_type != "auto":
-                values = await self.client.read(address=address, count=size, register_type=reg_type)
-    
-            else:
-                # Proper auto-detect: try in sensible order (same as bulk)
-                for test_type in ["holding", "input", "coil", "discrete"]:
-                    test_values = await self.client.read(address=address, count=size, register_type=test_type)
-                    if test_values is not None:
-                        values = test_values
-                        detected_type = test_type
-                        break
-    
+
+            try:
+                # If explicitly not auto, just read once
+                if reg_type != "auto":
+                    values = await self.client.read(address=address, count=size, register_type=reg_type)
+
+                else:
+                    # Proper auto-detect: try in sensible order (same as bulk)
+                    for test_type in ["holding", "input", "coil", "discrete"]:
+                        try:
+                            test_values = await self.client.read(address=address, count=size, register_type=test_type)
+                            if test_values is not None:
+                                values = test_values
+                                detected_type = test_type
+                                break
+                        except ModbusIOException:
+                            continue  # Try next type
+
+            except ModbusIOException as err:
+                _LOGGER.warning("[Modbus] I/O error reading address %s: %s - will attempt reconnect on next request", address, err)
+                # Connection will be recovered on next _async_connect call
+                return None
+
             if values is None or len(values) == 0:
                 _LOGGER.warning("Read failed for address %s", address)
                 return None
-    
+
             # Raw mode for Wizard card debugging
             if raw:
                 is_coil = isinstance(values[0], bool) if values else False
@@ -372,7 +406,7 @@ class ModbusCoordinator(BaseProtocolCoordinator):
                     "address": addr,
                     "size": size,
                 }
-    
+
             return self._decode_value(values, entity_config)
     
     async def async_write_entity(self, address: str, value: Any, entity_config: dict, **kwargs) -> bool:
