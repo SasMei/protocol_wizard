@@ -1,7 +1,7 @@
 [
   {
     "name": "Digital Input 1",
-    "address": 0,
+    "address": 129,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -17,7 +17,7 @@
   },
   {
     "name": "Digital Input 2",
-    "address": 1,
+    "address": 130,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -33,7 +33,7 @@
   },
   {
     "name": "Digital Input 3",
-    "address": 2,
+    "address": 131,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -49,7 +49,7 @@
   },
   {
     "name": "Digital Input 4",
-    "address": 3,
+    "address": 132,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -65,7 +65,7 @@
   },
   {
     "name": "Digital Input 5",
-    "address": 4,
+    "address": 133,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -81,7 +81,7 @@
   },
   {
     "name": "Digital Input 6",
-    "address": 5,
+    "address": 134,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -97,7 +97,7 @@
   },
   {
     "name": "Digital Input 7",
-    "address": 6,
+    "address": 135,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -113,7 +113,7 @@
   },
   {
     "name": "Digital Input 8",
-    "address": 7,
+    "address": 136,
     "data_type": "uint16",
     "register_type": "input",
     "rw": "read",
@@ -129,22 +129,6 @@
   },
   {
     "name": "Relay 1",
-    "address": 0,
-    "data_type": "uint16",
-    "register_type": "holding",
-    "rw": "read_write",
-    "unit": "",
-    "scale": 1.0,
-    "offset": 0.0,
-    "byte_order": "big",
-    "word_order": "big",
-    "allow_bits": true,
-    "device_class": "switch",
-    "state_class": null,
-    "icon": "mdi:toggle-switch"
-  },
-  {
-    "name": "Relay 2",
     "address": 1,
     "data_type": "uint16",
     "register_type": "holding",
@@ -160,7 +144,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 3",
+    "name": "Relay 2",
     "address": 2,
     "data_type": "uint16",
     "register_type": "holding",
@@ -176,7 +160,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 4",
+    "name": "Relay 3",
     "address": 3,
     "data_type": "uint16",
     "register_type": "holding",
@@ -192,7 +176,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 5",
+    "name": "Relay 4",
     "address": 4,
     "data_type": "uint16",
     "register_type": "holding",
@@ -208,7 +192,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 6",
+    "name": "Relay 5",
     "address": 5,
     "data_type": "uint16",
     "register_type": "holding",
@@ -224,7 +208,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 7",
+    "name": "Relay 6",
     "address": 6,
     "data_type": "uint16",
     "register_type": "holding",
@@ -240,7 +224,7 @@
     "icon": "mdi:toggle-switch"
   },
   {
-    "name": "Relay 8",
+    "name": "Relay 7",
     "address": 7,
     "data_type": "uint16",
     "register_type": "holding",
@@ -254,5 +238,53 @@
     "device_class": "switch",
     "state_class": null,
     "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Relay 8",
+    "address": 8,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read_write",
+    "unit": "",
+    "scale": 1.0,
+    "offset": 0.0,
+    "byte_order": "big",
+    "word_order": "big",
+    "allow_bits": true,
+    "device_class": "switch",
+    "state_class": null,
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Input/Output Relationship Mode",
+    "address": 129,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read_write",
+    "unit": "",
+    "scale": 1.0,
+    "offset": 0.0,
+    "byte_order": "big",
+    "word_order": "big",
+    "allow_bits": false,
+    "device_class": null,
+    "state_class": null,
+    "icon": "mdi:cog"
+  },
+  {
+    "name": "Baud Rate Setting",
+    "address": 254,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read_write",
+    "unit": "",
+    "scale": 1.0,
+    "offset": 0.0,
+    "byte_order": "big",
+    "word_order": "big",
+    "allow_bits": false,
+    "device_class": null,
+    "state_class": null,
+    "icon": "mdi:speedometer"
   }
 ]
