@@ -108,7 +108,7 @@
     "icon": "mdi:toggle-switch",
     "options": {
       "0": "Close",
-      "1": "Open",
+      "1": "Open"
     }
   },
   {
@@ -126,7 +126,7 @@
       "3" : "Toggle",
       "4" : "Latch",
       "5" : "Momentary",
-      "6" : "Delay",
+      "6" : "Delay"
     }
   },
   {
@@ -227,7 +227,7 @@
       "0": "Unrelated",
       "1": "Self-Locking",
       "2" : "Interlocking",
-      "3" : "Momentary",
+      "3" : "Momentary"
     }
   },
   {
@@ -246,7 +246,7 @@
       "2" : "4800",
       "3" : "9600",
       "4" : "19200",
-      "5" : "Factory reset",
+      "5" : "Factory reset"
     }
   }
 ]
