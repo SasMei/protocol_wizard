@@ -289,9 +289,23 @@ class BaseEntityManager(ABC):
             unique_id = self._unique_id(config)
             desired_ids.add(unique_id)
 
+            # Check both in-memory dict AND HA entity registry
             if unique_id in self.entities:
-                _LOGGER.debug("[EntityManager] Entity '%s' already exists (uid=%s)", entity_name, unique_id)
-                continue  # Entity already exists
+                _LOGGER.debug("[EntityManager] Entity '%s' already exists in memory (uid=%s)", entity_name, unique_id)
+                continue
+
+            # Also check if entity exists in HA registry (from previous session)
+            existing_entry = self.ent_reg.async_get_entity_id(
+                self._get_entity_type_suffix(),  # domain like "sensor", "number", etc.
+                "protocol_wizard",  # platform
+                unique_id
+            )
+            if existing_entry:
+                _LOGGER.debug("[EntityManager] Entity '%s' already exists in registry (uid=%s, entity_id=%s)",
+                             entity_name, unique_id, existing_entry)
+                # Track it in our dict so we don't try again
+                self.entities[unique_id] = None  # Placeholder - entity exists but we don't have the object
+                continue
 
             _LOGGER.debug("[EntityManager] Creating NEW entity '%s' (uid=%s)", entity_name, unique_id)
             entity = self._create_entity(
@@ -315,10 +329,20 @@ class BaseEntityManager(ABC):
         for uid in list(self.entities):
             if uid not in desired_ids:
                 entity = self.entities.pop(uid)
-                if entity.entity_id:
+                if entity is None:
+                    # Placeholder entry - remove from registry by unique_id
+                    entity_id = self.ent_reg.async_get_entity_id(
+                        self._get_entity_type_suffix(),
+                        "protocol_wizard",
+                        uid
+                    )
+                    if entity_id:
+                        self.ent_reg.async_remove(entity_id)
+                        _LOGGER.debug("Removed entity from registry: %s", entity_id)
+                elif entity.entity_id:
                     self.ent_reg.async_remove(entity.entity_id)
                     _LOGGER.debug("Removed entity %s", entity.entity_id)
-                await entity.async_remove()
+                    await entity.async_remove()
         
         _LOGGER.info(
             "%s sync complete — active=%d, defined=%d",
