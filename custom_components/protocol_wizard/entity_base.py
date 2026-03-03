@@ -314,8 +314,8 @@ class BaseEntityManager(ABC):
                 len(new_entities),
                 self._get_entity_type_suffix()
             )
-        
-        # Remove entities that are no longer in config
+
+        # Remove entities that are no longer in config (from our in-memory dict)
         for uid in list(self.entities):
             if uid not in desired_ids:
                 entity = self.entities.pop(uid)
@@ -323,6 +323,28 @@ class BaseEntityManager(ABC):
                     self.ent_reg.async_remove(entity.entity_id)
                     _LOGGER.debug("Removed entity %s", entity.entity_id)
                     await entity.async_remove()
+
+        # Also clean up orphaned registry entries for this coordinator
+        # This handles entities that exist in registry but not in our dict
+        domain = self._get_entity_type_suffix()
+        # Build prefix to match our coordinator's entities
+        if hasattr(self.coordinator, 'slave_id'):
+            uid_prefix = f"{self.entry.entry_id}_s{self.coordinator.slave_id}_"
+        elif hasattr(self.coordinator, 'device_index') and self.coordinator.device_index > 0:
+            uid_prefix = f"{self.entry.entry_id}_d{self.coordinator.device_index}_"
+        else:
+            uid_prefix = f"{self.entry.entry_id}_"
+        uid_suffix = f"_{domain}"
+
+        for entry in list(self.ent_reg.entities.values()):
+            if (entry.platform == "protocol_wizard" and
+                entry.unique_id and
+                entry.unique_id.startswith(uid_prefix) and
+                entry.unique_id.endswith(uid_suffix) and
+                entry.unique_id not in desired_ids):
+                _LOGGER.debug("Removing orphaned registry entry: %s (uid=%s)",
+                             entry.entity_id, entry.unique_id)
+                self.ent_reg.async_remove(entry.entity_id)
         
         _LOGGER.info(
             "%s sync complete — active=%d, defined=%d",
