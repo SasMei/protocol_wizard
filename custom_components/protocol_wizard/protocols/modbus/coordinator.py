@@ -288,9 +288,14 @@ class ModbusCoordinator(BaseProtocolCoordinator):
                 decoded = decoded.rstrip("\x00")
 
             if isinstance(decoded, (int, float)):
-                scale = entity_config.get("scale", 1.0)
-                offset = entity_config.get("offset", 0.0)
+                scale = entity_config.get("scale", 1)
+                offset = entity_config.get("offset", 0)
                 decoded = decoded * scale + offset
+
+                # Preserve integer type for integer data types when result is whole number
+                if data_type in ("uint16", "int16", "uint32", "int32", "uint64", "int64"):
+                    if isinstance(decoded, float) and decoded.is_integer():
+                        decoded = int(decoded)
 
             return decoded
 

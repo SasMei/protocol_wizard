@@ -615,7 +615,16 @@ class ProtocolWizardSelectBase(CoordinatorEntity, SelectEntity):
     @property
     def current_option(self):
         raw = self.coordinator.data.get(self._key)
-        return self._value_map.get(str(raw))
+        if raw is None:
+            return None
+        # Try exact match first, then try as int (handles 0.0 -> "0")
+        raw_str = str(raw)
+        if raw_str in self._value_map:
+            return self._value_map[raw_str]
+        # Handle float that's really an int (e.g., 0.0 -> "0")
+        if isinstance(raw, float) and raw.is_integer():
+            return self._value_map.get(str(int(raw)))
+        return None
     
     async def async_select_option(self, option: str) -> None:
         """Write selected option to protocol."""
