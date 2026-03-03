@@ -119,6 +119,8 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         failed_count = 0
         consecutive_failures = 0
         max_consecutive_failures = 2
+        # Also limit total failures to prevent long update cycles
+        max_total_failures = min(5, max(2, len(entities) // 3))
 
         # Single lock acquisition for entire update cycle: connect + all reads
         async with self._lock:
@@ -126,13 +128,21 @@ class ModbusCoordinator(BaseProtocolCoordinator):
                 _LOGGER.warning("[Modbus] Could not connect to device — skipping update")
                 return {}
             for entity in entities:
-                # Early abort if device is clearly dead
+                # Early abort if device is clearly dead (consecutive failures)
                 if consecutive_failures >= max_consecutive_failures:
                     _LOGGER.warning(
                         "[Modbus] Too many consecutive failures (%d) — aborting update cycle",
                         max_consecutive_failures
                     )
                     await self.client.disconnect()
+                    break
+
+                # Also abort if too many total failures (even if not consecutive)
+                if failed_count >= max_total_failures:
+                    _LOGGER.warning(
+                        "[Modbus] Too many total failures (%d/%d) — aborting update cycle",
+                        failed_count, len(entities)
+                    )
                     break
 
                 result = await self._read_entity(entity)
@@ -147,9 +157,9 @@ class ModbusCoordinator(BaseProtocolCoordinator):
                 formatted = self._format_value(decoded, entity)
                 new_data[key] = formatted
 
-        # Optional final health check
-        if failed_count > len(entities) // 2:
-            _LOGGER.info("[Modbus] High failure rate (%d/%d) — will retry connection", failed_count, len(entities))
+        # Log if there were failures
+        if failed_count > 0:
+            _LOGGER.info("[Modbus] Update completed with %d/%d failures", failed_count, len(entities))
 
         return new_data
 

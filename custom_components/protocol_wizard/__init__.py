@@ -6,6 +6,7 @@ import shutil
 import logging
 import os
 import asyncio
+import re
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.config_entries import ConfigEntry
@@ -244,17 +245,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
                 # Load template for this specific slave if specified
                 slave_template = slave_info.get("template")
+                current_register_count = len(slave_info.get("registers", []))
+                _LOGGER.debug("[Modbus Setup] Slave %d: template=%s, template_applied=%s, current_registers=%d",
+                             slave_id, slave_template, slave_info.get("template_applied"), current_register_count)
+
                 if slave_template and not slave_info.get("template_applied"):
                     _LOGGER.info("Loading template '%s' for slave %d (%s)", slave_template, slave_id, slave_name)
                     template_entities = await load_template(hass, protocol_name, slave_template)
                     if template_entities:
                         slave_info["registers"] = template_entities
                         slave_info["template_applied"] = True
+                        _LOGGER.info("[Modbus Setup] Loaded %d entities from template for slave %d",
+                                    len(template_entities), slave_id)
 
                         # Save back to options
                         options = dict(entry.options)
                         options[CONF_SLAVES] = slaves
                         hass.config_entries.async_update_entry(entry, options=options)
+                        _LOGGER.debug("[Modbus Setup] Saved template entities to options for slave %d", slave_id)
+                    else:
+                        _LOGGER.warning("[Modbus Setup] Template '%s' returned no entities for slave %d",
+                                       slave_template, slave_id)
+                elif slave_template and slave_info.get("template_applied"):
+                    _LOGGER.debug("[Modbus Setup] Slave %d: template already applied, using %d existing entities",
+                                 slave_id, current_register_count)
 
                 await coordinator.async_config_entry_first_refresh()
 
@@ -542,7 +556,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
                 parity=config.get(CONF_PARITY, DEFAULT_PARITY),
                 stopbits=config.get(CONF_STOPBITS, DEFAULT_STOPBITS),
                 bytesize=config.get(CONF_BYTESIZE, DEFAULT_BYTESIZE),
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
     elif connection_type == CONNECTION_TYPE_IP and protocol == CONNECTION_TYPE_UDP:
         key = f"ip_udp:{config[CONF_HOST]}:{config[CONF_PORT]}"
@@ -552,7 +567,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
             hass.data[DOMAIN]["connections"][key] = AsyncModbusUdpClient(
                 host=config[CONF_HOST],
                 port=config[CONF_PORT],
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
     else:  # TCP
         key = f"ip_tcp:{config[CONF_HOST]}:{config[CONF_PORT]}"
@@ -562,7 +578,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
             hass.data[DOMAIN]["connections"][key] = AsyncModbusTcpClient(
                 host=config[CONF_HOST],
                 port=config[CONF_PORT],
-                timeout=5,
+                timeout=3,
+                retries=1,  # Reduce from default 3 to speed up failure detection
             )
 
     pymodbus_client = hass.data[DOMAIN]["connections"][key]
@@ -705,6 +722,25 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Support slave_id parameter for multi-slave Modbus
             target_slave_id = call.data.get("slave_id")
 
+            # If slave_id not provided, try to extract from hub entity's unique_id or entity_id
+            # Hub entity unique_id format: {entry_id}_slave_{slave_id}_{protocol}_hub
+            # Hub entity_id format: sensor.slave_{slave_id}_{protocol}_hub
+            if target_slave_id is None and entity_entry:
+                # Try unique_id first (more reliable)
+                if entity_entry.unique_id:
+                    match = re.search(r'_slave_(\d+)_', entity_entry.unique_id)
+                    if match:
+                        target_slave_id = int(match.group(1))
+                        _LOGGER.debug("Extracted slave_id %d from unique_id: %s",
+                                     target_slave_id, entity_entry.unique_id)
+                # Fallback to entity_id pattern
+                if target_slave_id is None and entity_id:
+                    match = re.search(r'slave_(\d+)_', entity_id)
+                    if match:
+                        target_slave_id = int(match.group(1))
+                        _LOGGER.debug("Extracted slave_id %d from entity_id: %s",
+                                     target_slave_id, entity_id)
+
             if protocol == CONF_PROTOCOL_MODBUS:
                 # Check if we have slaves (new structure)
                 slaves = current_options.get(CONF_SLAVES, [])
@@ -718,7 +754,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                                 slave_idx = i
                                 break
                         else:
-                            raise HomeAssistantError(f"Slave ID {target_slave_id} not found")
+                            # Slave ID from entity not found in slaves list - log warning and use first slave
+                            _LOGGER.warning("Slave ID %d not found in slaves list, using first slave",
+                                          target_slave_id)
+                            slave_idx = 0
                     entities = list(slaves[slave_idx].get("registers", []))
                 else:
                     # Old structure fallback
@@ -785,11 +824,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Update the config entry
             hass.config_entries.async_update_entry(entry, options=current_options)
 
+            # Include slave info in log for multi-slave debugging
+            slave_info_str = f" (slave {target_slave_id})" if target_slave_id is not None else ""
             _LOGGER.info(
-                "Added new entity '%s' at address '%s' to %s",
+                "Added new entity '%s' at address '%s' to %s%s",
                 new_entity["name"],
                 new_entity["address"],
-                entry.title
+                entry.title,
+                slave_info_str
             )
 
             return {
