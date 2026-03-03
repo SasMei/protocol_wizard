@@ -9,6 +9,7 @@ import asyncio
 import re
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -56,6 +57,7 @@ from .const import (
     CONF_REGISTERS,
     CONF_SLAVES,
     CONF_BACNET_DEVICES,
+    SIGNAL_ENTITY_SYNC,
 )
 
 
@@ -823,6 +825,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
             # Update the config entry
             hass.config_entries.async_update_entry(entry, options=current_options)
+
+            # Notify entity managers to sync (since update_listener is only triggered by options flow)
+            async_dispatcher_send(hass, f"{SIGNAL_ENTITY_SYNC}_{entry.entry_id}")
+            _LOGGER.debug("Dispatched entity sync signal for entry %s", entry.entry_id)
 
             # Include slave info in log for multi-slave debugging
             slave_info_str = f" (slave {target_slave_id})" if target_slave_id is not None else ""

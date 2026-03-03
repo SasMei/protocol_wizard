@@ -49,6 +49,12 @@ async def async_setup_entry(
     """Set up switch entities for all coordinators in this entry."""
     coordinators = get_all_coordinators_for_entry(hass, entry)
 
+    # Store managers to prevent garbage collection (weak refs in update_listener)
+    if "entity_managers" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["entity_managers"] = {}
+    if entry.entry_id not in hass.data[DOMAIN]["entity_managers"]:
+        hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
+
     for coordinator, device_info in coordinators:
         manager = SwitchManager(
             hass=hass,
@@ -58,7 +64,13 @@ async def async_setup_entry(
             device_info=device_info,
         )
 
+        # Store reference to prevent GC
+        hass.data[DOMAIN]["entity_managers"][entry.entry_id].append(manager)
+
         await manager.sync_entities()
+
+        # Subscribe to dispatcher signal for entity sync
+        manager.subscribe_to_entity_sync()
 
         remove_listener = entry.add_update_listener(manager.handle_options_update)
         entry.async_on_unload(remove_listener)
