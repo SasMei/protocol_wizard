@@ -172,6 +172,13 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         count = int(TYPE_SIZES.get(entity["data_type"].lower(), 1))
         reg_type = entity.get("register_type", "holding")
 
+        # Debug: verify coordinator and client slave_id match
+        coordinator_slave = getattr(self, 'slave_id', '?')
+        client_slave = self.client.slave_id
+        if coordinator_slave != '?' and int(coordinator_slave) != int(client_slave):
+            _LOGGER.error("[Modbus] SLAVE ID MISMATCH! coordinator.slave_id=%s but client.slave_id=%s",
+                         coordinator_slave, client_slave)
+
         # Auto-detect
         if reg_type == "auto":
             detected = await self._auto_detect_type(address, count)
