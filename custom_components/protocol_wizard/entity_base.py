@@ -194,6 +194,8 @@ class BaseEntityManager(ABC):
     
     async def sync_entities(self) -> None:
         """Create, update, and remove entities based on current config."""
+        _LOGGER.debug("[EntityManager] sync_entities called for %s, existing entities: %d",
+                     self._get_entity_type_suffix(), len(self.entities))
         config_key = self._get_entities_config_key()
 
         # For Modbus, check if we have the new CONF_SLAVES structure
@@ -253,21 +255,27 @@ class BaseEntityManager(ABC):
         new_entities: list[Entity] = []
 
         for config in current_configs:
-            if not self._should_create_entity(config):
+            entity_name = config.get("name", "unknown")
+            should_create = self._should_create_entity(config)
+            _LOGGER.debug("[EntityManager] Processing config '%s': should_create=%s for %s",
+                         entity_name, should_create, self._get_entity_type_suffix())
+            if not should_create:
                 continue
-            
+
             unique_id = self._unique_id(config)
             desired_ids.add(unique_id)
-            
+
             if unique_id in self.entities:
+                _LOGGER.debug("[EntityManager] Entity '%s' already exists (uid=%s)", entity_name, unique_id)
                 continue  # Entity already exists
-            
+
+            _LOGGER.debug("[EntityManager] Creating NEW entity '%s' (uid=%s)", entity_name, unique_id)
             entity = self._create_entity(
                 entity_config=config,
                 unique_id=unique_id,
                 key=self._entity_key(config["name"]),
             )
-            
+
             self.entities[unique_id] = entity
             new_entities.append(entity)
         
@@ -297,6 +305,9 @@ class BaseEntityManager(ABC):
     
     async def handle_options_update(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Handle options update callback."""
+        _LOGGER.debug("[EntityManager] handle_options_update called for %s (coordinator: %s)",
+                     self._get_entity_type_suffix(),
+                     getattr(self.coordinator, 'coordinator_key', 'unknown'))
         await self.sync_entities()
 
 
