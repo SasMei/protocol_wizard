@@ -289,9 +289,23 @@ class BaseEntityManager(ABC):
             unique_id = self._unique_id(config)
             desired_ids.add(unique_id)
 
+            # Check both in-memory dict AND HA entity registry
             if unique_id in self.entities:
-                _LOGGER.debug("[EntityManager] Entity '%s' already exists (uid=%s)", entity_name, unique_id)
-                continue  # Entity already exists
+                _LOGGER.debug("[EntityManager] Entity '%s' already exists in memory (uid=%s)", entity_name, unique_id)
+                continue
+
+            # Also check if entity exists in HA registry (from previous session)
+            existing_entry = self.ent_reg.async_get_entity_id(
+                self._get_entity_type_suffix(),  # domain like "sensor", "number", etc.
+                "protocol_wizard",  # platform
+                unique_id
+            )
+            if existing_entry:
+                _LOGGER.debug("[EntityManager] Entity '%s' already exists in registry (uid=%s, entity_id=%s)",
+                             entity_name, unique_id, existing_entry)
+                # Track it in our dict so we don't try again
+                self.entities[unique_id] = None  # Placeholder - entity exists but we don't have the object
+                continue
 
             _LOGGER.debug("[EntityManager] Creating NEW entity '%s' (uid=%s)", entity_name, unique_id)
             entity = self._create_entity(
@@ -315,10 +329,20 @@ class BaseEntityManager(ABC):
         for uid in list(self.entities):
             if uid not in desired_ids:
                 entity = self.entities.pop(uid)
-                if entity.entity_id:
+                if entity is None:
+                    # Placeholder entry - remove from registry by unique_id
+                    entity_id = self.ent_reg.async_get_entity_id(
+                        self._get_entity_type_suffix(),
+                        "protocol_wizard",
+                        uid
+                    )
+                    if entity_id:
+                        self.ent_reg.async_remove(entity_id)
+                        _LOGGER.debug("Removed entity from registry: %s", entity_id)
+                elif entity.entity_id:
                     self.ent_reg.async_remove(entity.entity_id)
                     _LOGGER.debug("Removed entity %s", entity.entity_id)
-                await entity.async_remove()
+                    await entity.async_remove()
         
         _LOGGER.info(
             "%s sync complete — active=%d, defined=%d",
@@ -718,6 +742,95 @@ class ProtocolWizardHubEntity(CoordinatorEntity, SensorEntity):
         except Exception as err:
             _LOGGER.debug("Failed to get hub status: %s", err)
             return "unknown"
+
+
+class ModbusSlaveIdEntity(CoordinatorEntity, SensorEntity):
+    """Diagnostic entity showing the Modbus slave ID."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:identifier"
+
+    def __init__(
+        self,
+        coordinator: BaseProtocolCoordinator,
+        entry: ConfigEntry,
+        device_info: DeviceInfo,
+    ):
+        super().__init__(coordinator)
+        coordinator_key = getattr(coordinator, 'coordinator_key', entry.entry_id)
+        slave_id = getattr(coordinator, 'slave_id', 1)
+
+        self._attr_unique_id = f"{coordinator_key}_slave_id"
+        self._attr_name = "Slave ID"
+        self._attr_suggested_object_id = f"slave_{slave_id}_slave_id"
+        self._attr_device_info = device_info
+        self._slave_id = slave_id
+
+    @property
+    def native_value(self):
+        return self._slave_id
+
+
+class ModbusConnectionInfoEntity(CoordinatorEntity, SensorEntity):
+    """Diagnostic entity showing Modbus connection info (baud rate for serial, host:port for TCP)."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:serial-port"
+
+    def __init__(
+        self,
+        coordinator: BaseProtocolCoordinator,
+        entry: ConfigEntry,
+        device_info: DeviceInfo,
+    ):
+        super().__init__(coordinator)
+        coordinator_key = getattr(coordinator, 'coordinator_key', entry.entry_id)
+        slave_id = getattr(coordinator, 'slave_id', None)
+
+        self._attr_unique_id = f"{coordinator_key}_connection_info"
+        self._attr_name = "Connection Info"
+        if slave_id is not None:
+            self._attr_suggested_object_id = f"slave_{slave_id}_connection_info"
+        else:
+            self._attr_suggested_object_id = "connection_info"
+        self._attr_device_info = device_info
+        self._entry = entry
+
+        # Determine connection type and build info string
+        connection_type = entry.data.get("connection_type", "serial")
+        if connection_type == "serial":
+            self._attr_icon = "mdi:serial-port"
+            port = entry.data.get("serial_port", "unknown")
+            baudrate = entry.data.get("baudrate", 9600)
+            parity = entry.data.get("parity", "N")
+            stopbits = entry.data.get("stopbits", 1)
+            bytesize = entry.data.get("bytesize", 8)
+            self._connection_info = f"{baudrate} {bytesize}{parity}{stopbits}"
+            self._attr_extra_state_attributes = {
+                "connection_type": "serial",
+                "port": port,
+                "baudrate": baudrate,
+                "parity": parity,
+                "stopbits": stopbits,
+                "bytesize": bytesize,
+            }
+        else:
+            self._attr_icon = "mdi:ethernet"
+            host = entry.data.get("host", "unknown")
+            port = entry.data.get("port", 502)
+            ip_type = entry.data.get("ip", "TCP")
+            self._connection_info = f"{host}:{port} ({ip_type})"
+            self._attr_extra_state_attributes = {
+                "connection_type": ip_type.lower(),
+                "host": host,
+                "port": port,
+            }
+
+    @property
+    def native_value(self):
+        return self._connection_info
 
 
 def get_all_coordinators_for_entry(hass: HomeAssistant, entry: ConfigEntry):

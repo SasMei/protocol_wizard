@@ -57,10 +57,10 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         Ensure client is connected, with automatic recovery after errors.
         MUST be called while holding self._lock to prevent race conditions.
         """
-        # Check if reconnection is needed due to previous errors
+        # Check if reconnection is needed due to previous errors (shared across all slaves)
         if self.client.needs_reconnect:
             slave_id = getattr(self, 'slave_id', '?')
-            _LOGGER.info("[Modbus] Slave %s: Connection recovery needed, attempting reconnect...", slave_id)
+            _LOGGER.info("[Modbus] Shared connection recovery needed (triggered by slave %s poll), attempting reconnect...", slave_id)
             return await self.client.reconnect()
 
         # Check if already connected
@@ -113,6 +113,9 @@ class ModbusCoordinator(BaseProtocolCoordinator):
 
         if not entities:
             _LOGGER.debug("No entities to read")
+            # Still attempt to connect so hub entity can report accurate status
+            async with self._lock:
+                await self._async_connect_unlocked()
             return {}
 
         new_data = {}
@@ -168,6 +171,13 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         address = int(entity["address"])
         count = int(TYPE_SIZES.get(entity["data_type"].lower(), 1))
         reg_type = entity.get("register_type", "holding")
+
+        # Debug: verify coordinator and client slave_id match
+        coordinator_slave = getattr(self, 'slave_id', '?')
+        client_slave = self.client.slave_id
+        if coordinator_slave != '?' and int(coordinator_slave) != int(client_slave):
+            _LOGGER.error("[Modbus] SLAVE ID MISMATCH! coordinator.slave_id=%s but client.slave_id=%s",
+                         coordinator_slave, client_slave)
 
         # Auto-detect
         if reg_type == "auto":

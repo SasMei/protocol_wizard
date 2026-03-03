@@ -228,6 +228,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
                 # Create client (uses shared connection via existing caching)
                 client = await _create_modbus_client(hass, slave_config, entry)
+                _LOGGER.debug("[Modbus Setup] Created client for slave %d, client.slave_id=%d",
+                             slave_id, client.slave_id)
 
                 # Create coordinator with slave-specific entity list
                 update_interval = entry.options.get(CONF_UPDATE_INTERVAL, 10)
@@ -587,6 +589,8 @@ async def _create_modbus_client(hass: HomeAssistant, config: dict, entry: Config
     pymodbus_client = hass.data[DOMAIN]["connections"][key]
     slave_id = int(config[CONF_SLAVE_ID])
 
+    _LOGGER.debug("[Modbus] Creating ModbusClient wrapper for slave_id=%d (pymodbus_client id=%d)",
+                 slave_id, id(pymodbus_client))
     return ModbusClient(pymodbus_client, slave_id)
 
 def _create_snmp_client(config: dict) -> SNMPClient:
@@ -829,6 +833,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             # Notify entity managers to sync (since update_listener is only triggered by options flow)
             async_dispatcher_send(hass, f"{SIGNAL_ENTITY_SYNC}_{entry.entry_id}")
             _LOGGER.debug("Dispatched entity sync signal for entry %s", entry.entry_id)
+
+            # Trigger coordinator refresh so new entity gets data immediately
+            if target_slave_id is not None:
+                coordinator_key = f"{entry.entry_id}_slave_{target_slave_id}"
+            else:
+                coordinator_key = entry.entry_id
+            coordinator = hass.data[DOMAIN]["coordinators"].get(coordinator_key)
+            if coordinator:
+                await coordinator.async_request_refresh()
+                _LOGGER.debug("Triggered coordinator refresh for %s", coordinator_key)
 
             # Include slave info in log for multi-slave debugging
             slave_info_str = f" (slave {target_slave_id})" if target_slave_id is not None else ""
