@@ -52,6 +52,9 @@ async def async_setup_entry(
     # Store managers to prevent garbage collection (weak refs in update_listener)
     if "entity_managers" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["entity_managers"] = {}
+
+    # Note: Manager list cleanup is handled by sensor.py which runs first,
+    # or during unload. Just ensure the list exists.
     if entry.entry_id not in hass.data[DOMAIN]["entity_managers"]:
         hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
 

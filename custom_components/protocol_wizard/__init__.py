@@ -1193,4 +1193,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not unload_ok:
         return False
 
+    # Clean up entity managers and their signal subscriptions
+    if "entity_managers" in hass.data[DOMAIN]:
+        managers = hass.data[DOMAIN]["entity_managers"].pop(entry.entry_id, [])
+        for manager in managers:
+            if hasattr(manager, '_unsub_dispatcher') and manager._unsub_dispatcher:
+                manager._unsub_dispatcher()
+        _LOGGER.debug("Cleaned up %d entity managers for entry %s", len(managers), entry.entry_id)
+
     return True

@@ -55,8 +55,13 @@ async def async_setup_entry(
     # Store managers to prevent garbage collection (weak refs in update_listener)
     if "entity_managers" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["entity_managers"] = {}
-    if entry.entry_id not in hass.data[DOMAIN]["entity_managers"]:
-        hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
+
+    # Clean up any existing managers from previous setup (prevents duplicates on reload)
+    old_managers = hass.data[DOMAIN]["entity_managers"].get(entry.entry_id, [])
+    for manager in old_managers:
+        if hasattr(manager, '_unsub_dispatcher') and manager._unsub_dispatcher:
+            manager._unsub_dispatcher()
+    hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
 
     # Check if this is a Modbus device
     is_modbus = entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MODBUS
