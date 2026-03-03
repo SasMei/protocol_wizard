@@ -186,7 +186,7 @@
   },
   {
     "name": "Baud Rate Setting",
-    "address": 254,
+    "address": 255,
     "data_type": "uint16",
     "register_type": "holding",
     "rw": "rw",
