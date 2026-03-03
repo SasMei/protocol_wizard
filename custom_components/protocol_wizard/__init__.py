@@ -834,6 +834,16 @@ async def async_setup_services(hass: HomeAssistant) -> None:
             async_dispatcher_send(hass, f"{SIGNAL_ENTITY_SYNC}_{entry.entry_id}")
             _LOGGER.debug("Dispatched entity sync signal for entry %s", entry.entry_id)
 
+            # Trigger coordinator refresh so new entity gets data immediately
+            if target_slave_id is not None:
+                coordinator_key = f"{entry.entry_id}_slave_{target_slave_id}"
+            else:
+                coordinator_key = entry.entry_id
+            coordinator = hass.data[DOMAIN]["coordinators"].get(coordinator_key)
+            if coordinator:
+                await coordinator.async_request_refresh()
+                _LOGGER.debug("Triggered coordinator refresh for %s", coordinator_key)
+
             # Include slave info in log for multi-slave debugging
             slave_info_str = f" (slave {target_slave_id})" if target_slave_id is not None else ""
             _LOGGER.info(

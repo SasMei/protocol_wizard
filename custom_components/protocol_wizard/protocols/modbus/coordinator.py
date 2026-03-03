@@ -57,10 +57,10 @@ class ModbusCoordinator(BaseProtocolCoordinator):
         Ensure client is connected, with automatic recovery after errors.
         MUST be called while holding self._lock to prevent race conditions.
         """
-        # Check if reconnection is needed due to previous errors
+        # Check if reconnection is needed due to previous errors (shared across all slaves)
         if self.client.needs_reconnect:
             slave_id = getattr(self, 'slave_id', '?')
-            _LOGGER.info("[Modbus] Slave %s: Connection recovery needed, attempting reconnect...", slave_id)
+            _LOGGER.info("[Modbus] Shared connection recovery needed (triggered by slave %s poll), attempting reconnect...", slave_id)
             return await self.client.reconnect()
 
         # Check if already connected
