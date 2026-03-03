@@ -185,20 +185,6 @@
 
   },
   {
-    "name": "Input/Output Relationship Mode",
-    "address": 253,
-    "data_type": "uint16",
-    "register_type": "holding",
-    "rw": "rw",
-    "icon": "mdi:cog",
-    "options": {
-      "0": "Unrelated",
-      "1": "Self-Locking",
-      "2" : "Interlocking",
-      "3" : "Momentary"
-    }
-  },
-  {
     "name": "Baud Rate Setting",
     "address": 254,
     "data_type": "uint16",
