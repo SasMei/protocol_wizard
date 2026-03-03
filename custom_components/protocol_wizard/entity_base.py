@@ -9,10 +9,11 @@ import logging
 from typing import Any
 from abc import ABC, abstractmethod
 import json
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo, Entity, EntityCategory
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.components.number import NumberEntity,NumberMode
 from homeassistant.components.select import SelectEntity
@@ -28,6 +29,7 @@ from .const import (
     CONF_PROTOCOL,
     CONF_SLAVES,
     CONF_BACNET_DEVICES,
+    SIGNAL_ENTITY_SYNC,
 )
 from .protocols.base import BaseProtocolCoordinator
 
@@ -151,6 +153,28 @@ class BaseEntityManager(ABC):
         self.device_info = device_info
         self.entities: dict[str, Entity] = {}
         self.ent_reg = er.async_get(hass)
+        self._unsub_dispatcher = None
+
+    def subscribe_to_entity_sync(self) -> None:
+        """Subscribe to dispatcher signal for entity sync.
+
+        This is needed because add_update_listener uses weak references
+        and may not work if the manager object gets garbage collected.
+        """
+        @callback
+        def _handle_sync_signal() -> None:
+            """Handle entity sync signal."""
+            _LOGGER.debug("[EntityManager] Received sync signal for %s (coordinator: %s)",
+                         self._get_entity_type_suffix(),
+                         getattr(self.coordinator, 'coordinator_key', 'unknown'))
+            self.hass.async_create_task(self.sync_entities())
+
+        signal = f"{SIGNAL_ENTITY_SYNC}_{self.entry.entry_id}"
+        self._unsub_dispatcher = async_dispatcher_connect(
+            self.hass, signal, _handle_sync_signal
+        )
+        _LOGGER.debug("[EntityManager] Subscribed to signal %s for %s",
+                     signal, self._get_entity_type_suffix())
     
     @abstractmethod
     def _should_create_entity(self, entity_config: dict) -> bool:

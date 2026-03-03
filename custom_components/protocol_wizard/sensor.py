@@ -50,6 +50,12 @@ async def async_setup_entry(
     """Set up sensor entities for all coordinators in this entry."""
     coordinators = get_all_coordinators_for_entry(hass, entry)
 
+    # Store managers to prevent garbage collection (weak refs in update_listener)
+    if "entity_managers" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["entity_managers"] = {}
+    if entry.entry_id not in hass.data[DOMAIN]["entity_managers"]:
+        hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
+
     for coordinator, device_info in coordinators:
         # Add hub status entity per coordinator
         hub_entity = ProtocolWizardHubEntity(
@@ -68,10 +74,16 @@ async def async_setup_entry(
             device_info=device_info,
         )
 
+        # Store reference to prevent GC
+        hass.data[DOMAIN]["entity_managers"][entry.entry_id].append(manager)
+
         # Initial sync
         await manager.sync_entities()
 
-        # Re-sync on options change
+        # Subscribe to dispatcher signal for entity sync
+        manager.subscribe_to_entity_sync()
+
+        # Also register traditional update listener (may work if manager stays alive)
         _LOGGER.debug("[Sensor] Registering update listener for coordinator %s",
                      getattr(coordinator, 'coordinator_key', 'unknown'))
         remove_listener = entry.add_update_listener(manager.handle_options_update)
