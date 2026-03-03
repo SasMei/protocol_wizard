@@ -9,11 +9,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity import DeviceInfo
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_PROTOCOL, CONF_PROTOCOL_MODBUS
 from .entity_base import (
     BaseEntityManager,
     ProtocolWizardSensorBase,
     ProtocolWizardHubEntity,
+    ModbusSlaveIdEntity,
+    ModbusConnectionInfoEntity,
     get_all_coordinators_for_entry,
 )
 
@@ -56,6 +58,12 @@ async def async_setup_entry(
     if entry.entry_id not in hass.data[DOMAIN]["entity_managers"]:
         hass.data[DOMAIN]["entity_managers"][entry.entry_id] = []
 
+    # Check if this is a Modbus device
+    is_modbus = entry.data.get(CONF_PROTOCOL) == CONF_PROTOCOL_MODBUS
+
+    # Track if connection info entity was already added (shared across slaves)
+    connection_info_added = False
+
     for coordinator, device_info in coordinators:
         # Add hub status entity per coordinator
         hub_entity = ProtocolWizardHubEntity(
@@ -63,7 +71,30 @@ async def async_setup_entry(
             entry=entry,
             device_info=device_info,
         )
-        async_add_entities([hub_entity])
+
+        diagnostic_entities = [hub_entity]
+
+        # Add Modbus-specific diagnostic entities
+        if is_modbus:
+            # Slave ID entity (per slave)
+            slave_id_entity = ModbusSlaveIdEntity(
+                coordinator=coordinator,
+                entry=entry,
+                device_info=device_info,
+            )
+            diagnostic_entities.append(slave_id_entity)
+
+            # Connection info entity (only add once for the first slave)
+            if not connection_info_added:
+                connection_info_entity = ModbusConnectionInfoEntity(
+                    coordinator=coordinator,
+                    entry=entry,
+                    device_info=device_info,
+                )
+                diagnostic_entities.append(connection_info_entity)
+                connection_info_added = True
+
+        async_add_entities(diagnostic_entities)
 
         # Set up dynamic sensor manager
         manager = SensorManager(
