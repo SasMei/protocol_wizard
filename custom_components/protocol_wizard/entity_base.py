@@ -448,14 +448,14 @@ class ProtocolWizardNumberBase(CoordinatorEntity, NumberEntity):
     @property
     def native_value(self):
         return self.coordinator.data.get(self._key)
-        
-    @property
-    def native_min_value(self) -> float | None:
-        return self._config.get("min")
 
     @property
-    def native_max_value(self) -> float | None:
-        return self._config.get("max")
+    def native_min_value(self) -> float:
+        return self._attr_native_min_value
+
+    @property
+    def native_max_value(self) -> float:
+        return self._attr_native_max_value
 
     @property
     def native_step(self) -> float | None:
