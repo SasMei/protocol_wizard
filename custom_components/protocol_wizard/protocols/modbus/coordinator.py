@@ -113,6 +113,9 @@ class ModbusCoordinator(BaseProtocolCoordinator):
 
         if not entities:
             _LOGGER.debug("No entities to read")
+            # Still attempt to connect so hub entity can report accurate status
+            async with self._lock:
+                await self._async_connect_unlocked()
             return {}
 
         new_data = {}
