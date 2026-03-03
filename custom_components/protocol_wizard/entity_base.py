@@ -202,19 +202,21 @@ class BaseEntityManager(ABC):
     def _entity_key(self, name: str) -> str:
         """Generate consistent key from entity name."""
         return name.lower().strip().replace(" ", "_")
-    
+
     def _unique_id(self, entity_config: dict) -> str:
         """Generate stable unique_id, including slave_id for multi-slave."""
         address = entity_config.get("address", "unknown")
         entity_type = entity_config.get("register_type") or entity_config.get("entity_type", "auto")
         suffix = self._get_entity_type_suffix()
+        # Include entity name to handle multiple entities at same address
+        name_key = self._entity_key(entity_config.get("name", "unknown"))
         # Include slave_id/device_index for multi-slave/multi-device to prevent collisions
         slave_prefix = ""
         if hasattr(self.coordinator, 'slave_id'):
             slave_prefix = f"s{self.coordinator.slave_id}_"
         elif hasattr(self.coordinator, 'device_index') and self.coordinator.device_index > 0:
             slave_prefix = f"d{self.coordinator.device_index}_"
-        return f"{self.entry.entry_id}_{slave_prefix}{address}_{entity_type}_{suffix}"
+        return f"{self.entry.entry_id}_{slave_prefix}{name_key}_{address}_{entity_type}_{suffix}"
     
     async def sync_entities(self) -> None:
         """Create, update, and remove entities based on current config."""
