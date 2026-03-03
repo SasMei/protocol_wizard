@@ -71,6 +71,78 @@
     "device_class": "binary_sensor",
     "icon": "mdi:toggle-switch"
   },
+    {
+    "name": "Digital Input 9",
+    "address": 137,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 10",
+    "address": 138,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 11",
+    "address": 139,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 12",
+    "address": 140,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 13",
+    "address": 141,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 14",
+    "address": 142,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 15",
+    "address": 143,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
+  {
+    "name": "Digital Input 16",
+    "address": 144,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "read",
+    "device_class": "binary_sensor",
+    "icon": "mdi:toggle-switch"
+  },
   {
     "name": "Relay 1",
     "address": 1,
