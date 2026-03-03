@@ -78,26 +78,11 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
-    }
-
-  },
-  {
-    "name": "Relay 1 Set",
-    "address": 1,
-    "data_type": "uint16",
-    "register_type": "holding",
-    "rw": "rw",
-
-
-    "options": {
-      "1": "Open",
-      "2": "Close",
-      "3" : "Toggle",
-      "4" : "Latch",
-      "5" : "Momentary",
-      "6" : "Delay"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
   },
   {
@@ -107,10 +92,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 3",
@@ -119,10 +106,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 4",
@@ -131,10 +120,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 5",
@@ -143,10 +134,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 6",
@@ -155,10 +148,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 7",
@@ -167,10 +162,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Relay 8",
@@ -179,10 +176,12 @@
     "register_type": "holding",
     "rw": "rw",
     "options": {
-      "0":  "Relay Off",
-      "1": "Relay On"
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
     }
-
   },
   {
     "name": "Baud Rate Setting",
