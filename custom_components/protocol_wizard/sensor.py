@@ -72,5 +72,7 @@ async def async_setup_entry(
         await manager.sync_entities()
 
         # Re-sync on options change
+        _LOGGER.debug("[Sensor] Registering update listener for coordinator %s",
+                     getattr(coordinator, 'coordinator_key', 'unknown'))
         remove_listener = entry.add_update_listener(manager.handle_options_update)
         entry.async_on_unload(remove_listener)
