@@ -707,6 +707,7 @@ class ModbusSchemaHandler:
                             "uint32", "int32",
                             "float32",
                             "uint64", "int64",
+                            "string",
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
