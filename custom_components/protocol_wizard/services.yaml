@@ -56,6 +56,8 @@ write_register:
               value: int32
             - label: Float 32-bit
               value: float32
+            - label: String (max 32 chars)
+              value: string
 
     byte_order:
       name: Byte Order
