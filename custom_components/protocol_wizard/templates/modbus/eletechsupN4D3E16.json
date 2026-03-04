@@ -256,6 +256,118 @@
     }
   },
   {
+    "name": "Relay 9",
+    "address": 9,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 10",
+    "address": 10,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 11",
+    "address": 11,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 12",
+    "address": 12,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 13",
+    "address": 13,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 14",
+    "address": 14,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 15",
+    "address": 15,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
+    "name": "Relay 16",
+    "address": 16,
+    "data_type": "uint16",
+    "register_type": "holding",
+    "rw": "rw",
+    "options": {
+      "256": "Open",
+      "512": "Close",
+      "768" : "Toggle",
+      "1024" : "Latch",
+      "1280" : "Momentary"
+    }
+  },
+  {
     "name": "Baud Rate Setting",
     "address": 255,
     "data_type": "uint16",
